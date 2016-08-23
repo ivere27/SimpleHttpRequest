@@ -3,10 +3,13 @@
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <sstream>
 #include <string>
+#include <unistd.h>
+#include <stdlib.h>
 
 #include "uv.h"
 #include "http_parser.h"
@@ -15,11 +18,46 @@ using namespace std;
 
 static uv_loop_t* uv_loop;
 
-#ifdef DEBUG
-#define LOG(...) printf(__VA_ARGS__);
-#else
-#define LOG(...)
-#endif
+
+// FIXME : need a logger. copied from secc-native for testing.
+#define LOGE(...) LOGI(__VA_ARGS__)       // FIXME : to stderr?
+template <class T>
+void LOGI(T t)
+{
+  if (!getenv("DEBUG")) return;
+  if (!getenv("SECC_LOG"))  {
+    std::cout << t << std::endl;
+    return;
+  }
+
+  try {
+    std::ofstream logFile;
+    logFile.open(getenv("SECC_LOG"), std::ios::out | std::ios::app);
+    logFile << "[" << getpid() << "] " << t <<std::endl;
+    logFile.close();
+  } catch(const std::exception &e) {
+    std::cout << e.what() << std::endl;
+  }
+}
+template <class T, class... Args>
+void LOGI(T t, Args... args)
+{
+  if (!getenv("DEBUG")) return;
+  if (getenv("SECC_LOG")) {
+    try {
+      std::ofstream logFile;
+      logFile.open(getenv("SECC_LOG"), std::ios::out | std::ios::app);
+      logFile << "[" << getpid() << "] " << t;
+      logFile.close();
+    } catch(const std::exception &e) {
+      std::cout << e.what() << std::endl;
+    }
+  } else
+    std::cout << "[" << getpid() << "] " << t;
+
+  LOGI(args...);
+}
+
 
 template<class... T>
 using Callback = std::map<std::string, std::function<void(T...)>>;
@@ -40,7 +78,7 @@ class Client {
     };
 
     onClose = [](uv_handle_t* handle) {
-      LOG("onClose");
+      LOGI("onClose");
       handle->data = NULL;
     };
 
@@ -50,19 +88,19 @@ class Client {
       return 0;
     };
     parser_settings.on_url = [](http_parser *p, const char *buf, size_t len) {
-      LOG("Url: %.*s\n", (int)len, buf);
+      LOGI("Url: ", string(buf,len));
       return 0;
     };
 
     parser_settings.on_header_field = [](http_parser *p, const char *buf, size_t len) {
-      LOG("Header field: %.*s\n", (int)len, buf);
+      LOGI("Header field: ", string(buf,len));
       Client *client = (Client*)p->data;
       client->lastHeaderFieldBuf = (char*)buf;
       client->lastHeaderFieldLenth = (int)len;
       return 0;
     };
     parser_settings.on_header_value = [](http_parser *p, const char* buf, size_t len) {
-      LOG("Header value: %.*s\n", (int)len, buf);
+      LOGI("Header value: ", string(buf,len));
 
       Client *client = (Client*)p->data;
       string field = string(client->lastHeaderFieldBuf, client->lastHeaderFieldLenth);
@@ -74,10 +112,10 @@ class Client {
       return 0;
     };
     parser_settings.on_headers_complete = [](http_parser *p) {
-      LOG("on_headers_complete\n");
+      LOGI("on_headers_complete");
 
       Client *client = (Client*)p->data;
-      LOG("%s",client->responseHeaders["Content-Type"].c_str());
+      //LOGI(client->responseHeaders["Content-Type"].c_str());
       // TODO : make fields to lowcase
 
       return 0;
@@ -86,12 +124,12 @@ class Client {
     parser_settings.on_body = [](http_parser* parser, const char* buf, size_t len) {
       Client *client = (Client*)parser->data;
       if (buf)
-        client->responseBody << string(buf, len);
+        client->responseBody.rdbuf()->sputn(buf, len);
 
       //fprintf("Body: %.*s\n", (int)length, at);
       if (http_body_is_final(parser)) {
-          LOG("http_body_is_final")
-          LOG("%s",client->responseBody.str().c_str());
+          LOGI("http_body_is_final");
+          //LOGI(client->responseBody.str().c_str());
 
           client->emit("response");
       } else {
@@ -101,16 +139,16 @@ class Client {
     };
 
     parser_settings.on_message_complete = [](http_parser* parser) {
-      LOG("on_message_complete\n");
+      LOGI("on_message_complete");
       Client *client = (Client*)parser->data;
       ssize_t total_len = client->responseBody.str().size();
-      LOG("total_len: %ld\n",total_len)
+      LOGI("total_len: ",total_len);
       if (http_should_keep_alive(parser)) {
-          LOG("http_should_keep_alive\n");
+          LOGI("http_should_keep_alive");
           uv_stream_t* tcp = (uv_stream_t*)&client->tcp;
           uv_close((uv_handle_t*)tcp, client->onClose);
       }
-      LOG("%d\n",parser->status_code);
+      LOGI("status code : ",parser->status_code);
       return 0;
     };
   }
@@ -163,7 +201,7 @@ class Client {
             return;
         }
 
-        LOG("on_connected");
+        LOGI("on_connected");
 
         uv_buf_t resbuf;
         string res = client->options["method"] + " " + client->options["path"] + " " + "HTTP/1.1\r\n";
@@ -184,51 +222,52 @@ class Client {
           [](uv_stream_t *tcp, ssize_t nread, const uv_buf_t * buf) {
             ssize_t parsed;
             Client* client = (Client*)tcp->data;
-            LOG("onRead %ld\n",nread);
-            LOG("buf len: %ld\n",buf->len);
+            LOGI("onRead ", nread);
+            LOGI("buf len: ",buf->len);
             if (nread > 0) {
               http_parser *parser = &client->parser;
               parsed = (ssize_t)http_parser_execute(parser, &client->parser_settings, buf->base, nread);
 
-              LOG("%ld\n", parsed);
+              LOGI("parsed: ", parsed);
               if (parser->upgrade) {
-                LOG("raise upgrade error!!");
+                LOGI("raise upgrade error!!");
               } else if (parsed != nread) {
-                LOG("parsed %ld/%ld\n", parsed, nread);
-                LOG("%s\n", http_errno_description(HTTP_PARSER_ERRNO(parser)));
+                LOGI("parsed ", parsed,"/", nread);
+                LOGI("%s\n", http_errno_description(HTTP_PARSER_ERRNO(parser)));
               }
             } else {
               if (nread != UV_EOF) {
-                cerr <<  "read error " << uv_err_name(nread);
+                LOGE("read error ", uv_err_name(nread));
               }
             }
 
-            //LOG(buf->base);
+            //LOGI(buf->base);
 
             free(buf->base);
           });
 
         if (r)
-          cerr <<  "uv_write uv_read_start " << uv_err_name(r);
+          LOGE("uv_write uv_read_start ", uv_err_name(r));
 
         r = uv_write(&client->write_req, req->handle, &resbuf, 1,
           [](uv_write_t* /*req*/, int status) {
-            LOG("after write")
+            LOGI("after write");
             if (status)
-              cerr << "uv_write_t" << uv_err_name(status);
+              LOGE("uv_write_t ", uv_err_name(status));
           });
 
         if (r) {
-          cerr <<  "uv_write error " << uv_err_name(r);
+          LOGE("uv_write error ", uv_err_name(r));
         }
       });
 
     if (r) {
-      cerr <<  "uv_tcp_connect error " << uv_err_name(r);
+      LOGE("uv_tcp_connect error ", uv_err_name(r));
     }
   }
 
   map<string, string> responseHeaders;
+  stringstream responseBody;
  private:
   uv_loop_t* uv_loop;
 
@@ -239,7 +278,6 @@ class Client {
 
   http_parser_settings parser_settings;
   http_parser parser;
-  stringstream responseBody;
   stringstream requestBody;
 
   uv_alloc_cb allocCb;

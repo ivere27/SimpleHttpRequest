@@ -11,7 +11,7 @@ This is experimental yet.
 ```bash
 $ clang++ SimpleHttpRequest.cpp --std=c++11 \
 -I../http-parser/ -I../libuv/include/ \
--DDEBUG -lpthread  \
+-lpthread  \
 ../libuv/.libs/libuv.a \
-../http-parser/http_parser.o && ./a.out
+../http-parser/http_parser.o && DEBUG=1 ./a.out
 ```

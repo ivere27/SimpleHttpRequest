@@ -15,13 +15,10 @@ int main() {
 
   Client c(options, headers, uv_loop);
   c.on("error", [](){
-    cout << endl << "on error" << endl;
-  });
-  c.on("response", [](){
-    cout << endl << "on response" << endl;
-  });
-  c.write("");
-  c.end();
+    cerr << endl << "on error" << endl;
+  }).on("response", [&c](){
+    cout << c.responseBody.str().c_str();
+  }).end();
 
   // options["method"] = "POST";
   // headers["content-type"] = "application/json";
