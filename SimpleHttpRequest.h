@@ -195,13 +195,17 @@ class Client {
     r = uv_tcp_connect(&connect_req, &tcp, reinterpret_cast<const sockaddr*>(&addr),
       [](uv_connect_t *req, int status) {
         Client *client = (Client*)req->data;
-        if (status == -1) {
-            cerr <<  "connect failed error " << uv_err_name(status);
+        LOGI(status);
+        if (status != 0) {
             uv_close((uv_handle_t*)req->handle, client->onClose);
+            LOGE(uv_err_name(status), uv_strerror(status));
+            client->emit("error" );
             return;
         }
 
-        LOGI("on_connected");
+        LOGI("TC connection established to ",
+          client->options["hostname"].c_str(),
+          ":",client->options["port"].c_str());
 
         uv_buf_t resbuf;
         string res = client->options["method"] + " " + client->options["path"] + " " + "HTTP/1.1\r\n";
