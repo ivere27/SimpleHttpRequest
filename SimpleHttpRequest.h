@@ -62,9 +62,9 @@ void LOGI(T t, Args... args)
 template<class... T>
 using Callback = std::map<std::string, std::function<void(T...)>>;
 
-class Client {
+class SimpleHttpRequest {
  public:
-  Client(map<string, string> &options, map<string, string> &headers, uv_loop_t *loop) {
+  SimpleHttpRequest(map<string, string> &options, map<string, string> &headers, uv_loop_t *loop) {
     uv_loop = loop;
 
     // FIXME : pointer
@@ -94,7 +94,7 @@ class Client {
 
     parser_settings.on_header_field = [](http_parser *p, const char *buf, size_t len) {
       LOGI("Header field: ", string(buf,len));
-      Client *client = (Client*)p->data;
+      SimpleHttpRequest *client = (SimpleHttpRequest*)p->data;
       client->lastHeaderFieldBuf = (char*)buf;
       client->lastHeaderFieldLenth = (int)len;
       return 0;
@@ -102,7 +102,7 @@ class Client {
     parser_settings.on_header_value = [](http_parser *p, const char* buf, size_t len) {
       LOGI("Header value: ", string(buf,len));
 
-      Client *client = (Client*)p->data;
+      SimpleHttpRequest *client = (SimpleHttpRequest*)p->data;
       string field = string(client->lastHeaderFieldBuf, client->lastHeaderFieldLenth);
       string value = string(buf, len);
 
@@ -114,7 +114,7 @@ class Client {
     parser_settings.on_headers_complete = [](http_parser *p) {
       LOGI("on_headers_complete");
 
-      Client *client = (Client*)p->data;
+      SimpleHttpRequest *client = (SimpleHttpRequest*)p->data;
       //LOGI(client->responseHeaders["Content-Type"].c_str());
       // TODO : make fields to lowcase
 
@@ -122,7 +122,7 @@ class Client {
     };
 
     parser_settings.on_body = [](http_parser* parser, const char* buf, size_t len) {
-      Client *client = (Client*)parser->data;
+      SimpleHttpRequest *client = (SimpleHttpRequest*)parser->data;
       if (buf)
         client->responseBody.rdbuf()->sputn(buf, len);
 
@@ -140,7 +140,7 @@ class Client {
 
     parser_settings.on_message_complete = [](http_parser* parser) {
       LOGI("on_message_complete");
-      Client *client = (Client*)parser->data;
+      SimpleHttpRequest *client = (SimpleHttpRequest*)parser->data;
       ssize_t total_len = client->responseBody.str().size();
       LOGI("total_len: ",total_len);
       if (http_should_keep_alive(parser)) {
@@ -152,10 +152,10 @@ class Client {
       return 0;
     };
   }
-  ~Client() {}
+  ~SimpleHttpRequest() {}
 
   //FIXME : ..Args
-  Client& emit(string name) {
+  SimpleHttpRequest& emit(string name) {
     if (eventListeners.count(name))
       eventListeners[name]();
 
@@ -163,20 +163,20 @@ class Client {
   }
 
   template <class... Args>
-  Client& on(string name, std::function<void()> func) {
+  SimpleHttpRequest& on(string name, std::function<void()> func) {
     eventListeners[name] = func;
 
     return *this;
   }
 
 
-  Client& on(string name, std::function<void()> func) {
+  SimpleHttpRequest& on(string name, std::function<void()> func) {
     eventListeners[name] = func;
 
     return *this;
   }
 
-  Client& write(string data) {
+  SimpleHttpRequest& write(string data) {
     //FIXME : send directly later when tcp is open
     requestBody << data;
 
@@ -194,7 +194,7 @@ class Client {
 
     r = uv_tcp_connect(&connect_req, &tcp, reinterpret_cast<const sockaddr*>(&addr),
       [](uv_connect_t *req, int status) {
-        Client *client = (Client*)req->data;
+        SimpleHttpRequest *client = (SimpleHttpRequest*)req->data;
         LOGI(status);
         if (status != 0) {
             uv_close((uv_handle_t*)req->handle, client->onClose);
@@ -225,7 +225,7 @@ class Client {
         int r = uv_read_start(req->handle, client->allocCb,
           [](uv_stream_t *tcp, ssize_t nread, const uv_buf_t * buf) {
             ssize_t parsed;
-            Client* client = (Client*)tcp->data;
+            SimpleHttpRequest* client = (SimpleHttpRequest*)tcp->data;
             LOGI("onRead ", nread);
             LOGI("buf len: ",buf->len);
             if (nread > 0) {
