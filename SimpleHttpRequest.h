@@ -7,9 +7,7 @@
 #include <iostream>
 #include <map>
 #include <sstream>
-#include <string>
 #include <unistd.h>
-#include <stdlib.h>
 
 #include "uv.h"
 #include "http_parser.h"
@@ -19,43 +17,34 @@ using namespace std;
 static uv_loop_t* uv_loop;
 
 
-// FIXME : need a logger. copied from secc-native for testing.
-#define LOGE(...) LOGI(__VA_ARGS__)       // FIXME : to stderr?
-template <class T>
-void LOGI(T t)
+#define LOGE(...) LOGI(__VA_ARGS__, __LINE__, __PRETTY_FUNCTION__)       // FIXME : to stderr?
+void _LOGI(){}
+template <typename T, typename ...Args>
+void _LOGI(T t, Args && ...args)
 {
-  if (!getenv("DEBUG")) return;
-  if (!getenv("SECC_LOG"))  {
-    std::cout << t << std::endl;
-    return;
-  }
-
-  try {
-    std::ofstream logFile;
-    logFile.open(getenv("SECC_LOG"), std::ios::out | std::ios::app);
-    logFile << "[" << getpid() << "] " << t <<std::endl;
-    logFile.close();
-  } catch(const std::exception &e) {
-    std::cout << e.what() << std::endl;
-  }
-}
-template <class T, class... Args>
-void LOGI(T t, Args... args)
-{
-  if (!getenv("DEBUG")) return;
-  if (getenv("SECC_LOG")) {
+    if (getenv("SECC_LOG")) {
     try {
       std::ofstream logFile;
       logFile.open(getenv("SECC_LOG"), std::ios::out | std::ios::app);
-      logFile << "[" << getpid() << "] " << t;
+      logFile << std::forward<T>(t);
       logFile.close();
     } catch(const std::exception &e) {
-      std::cout << e.what() << std::endl;
+      std::cerr << e.what() << std::endl;
     }
   } else
-    std::cout << "[" << getpid() << "] " << t;
+    std::cout << std::forward<T>(t);
 
-  LOGI(args...);
+  _LOGI(std::forward<Args>(args)...);
+}
+template <typename T, typename ...Args>
+void LOGI(T t, Args && ...args)
+{
+  if (!getenv("DEBUG")) return;
+
+  _LOGI("[" + ::to_string(getpid()) + "] ");  // insert pid
+  _LOGI(std::forward<T>(t));
+  _LOGI(std::forward<Args>(args)...);
+  _LOGI('\n');
 }
 
 
@@ -148,7 +137,7 @@ class SimpleHttpRequest {
           uv_stream_t* tcp = (uv_stream_t*)&client->tcp;
           uv_close((uv_handle_t*)tcp, client->onClose);
       }
-      LOGI("status code : ",parser->status_code);
+      LOGI("status code : ", ::to_string(parser->status_code));
       return 0;
     };
   }
