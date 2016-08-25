@@ -143,7 +143,7 @@ class SimpleHttpRequest {
   }
   ~SimpleHttpRequest() {}
 
-  //FIXME : ..Args
+  //FIXME : variadic ..Args
   SimpleHttpRequest& emit(string name) {
     if (eventListeners.count(name))
       eventListeners[name]();
@@ -157,16 +157,24 @@ class SimpleHttpRequest {
 
     return *this;
   }
-
-
   SimpleHttpRequest& on(string name, std::function<void()> func) {
     eventListeners[name] = func;
 
     return *this;
   }
 
+  //FIXME : send directly later when tcp is open
+  SimpleHttpRequest& write(const std::istream &stream) {
+    this->headers["content-type"] = "application/octet-stream";
+    requestBody << stream.rdbuf();
+
+    return *this;
+  }
+  SimpleHttpRequest& write(const char* s, std::streamsize n) {
+    requestBody.rdbuf()->sputn(s, n);
+    return *this;
+  }
   SimpleHttpRequest& write(string data) {
-    //FIXME : send directly later when tcp is open
     requestBody << data;
 
     return *this;
