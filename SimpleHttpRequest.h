@@ -1,3 +1,5 @@
+#pragma once
+
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
@@ -16,8 +18,8 @@ using namespace std;
 
 static uv_loop_t* uv_loop;
 
-
-#define LOGE(...) LOGI(__VA_ARGS__, __LINE__, __PRETTY_FUNCTION__)       // FIXME : to stderr?
+// FIXME : to stderr with __LINE__, __PRETTY_FUNCTION__ ?
+#define LOGE(...) LOGI(__VA_ARGS__)
 void _LOGI(){}
 template <typename T, typename ...Args>
 void _LOGI(T t, Args && ...args)
@@ -104,9 +106,6 @@ class SimpleHttpRequest {
       LOGI("on_headers_complete");
 
       SimpleHttpRequest *client = (SimpleHttpRequest*)p->data;
-      //LOGI(client->responseHeaders["Content-Type"].c_str());
-      // TODO : make fields to lowcase
-
       return 0;
     };
 
@@ -182,27 +181,77 @@ class SimpleHttpRequest {
 
   void end() {
     int r = uv_ip4_addr(options["hostname"].c_str(), stoi(options["port"]), &addr);
-    //printf("%d\n",r);
+    if (r != 0) {
+      LOGE("uv_ip4_addr", uv_err_name(r), uv_strerror(r));
+      this->emit("error");
+      return;
+    }
 
     r = uv_tcp_init(uv_loop, &tcp);
+    if (r != 0) {
+      LOGE("uv_tcp_init", uv_err_name(r), uv_strerror(r));
+      this->emit("error");
+      return;
+    }
+
     tcp.data = this;          //FIXME : use one
     connect_req.data = this;
     parser.data = this;
+    write_req.data = this;
 
     r = uv_tcp_connect(&connect_req, &tcp, reinterpret_cast<const sockaddr*>(&addr),
       [](uv_connect_t *req, int status) {
         SimpleHttpRequest *client = (SimpleHttpRequest*)req->data;
-        LOGI(status);
         if (status != 0) {
             uv_close((uv_handle_t*)req->handle, client->onClose);
-            LOGE(uv_err_name(status), uv_strerror(status));
-            client->emit("error" );
+            LOGE("uv_connect_cb", uv_err_name(status), uv_strerror(status));
+            client->emit("error");
             return;
         }
 
         LOGI("TC connection established to ",
           client->options["hostname"].c_str(),
           ":",client->options["port"].c_str());
+
+        int r = uv_read_start(req->handle, client->allocCb,
+          [](uv_stream_t *tcp, ssize_t nread, const uv_buf_t * buf) {
+            ssize_t parsed;
+            SimpleHttpRequest* client = (SimpleHttpRequest*)tcp->data;
+            LOGI("onRead ", nread);
+            LOGI("buf len: ", buf->len);
+            if (nread > 0) {
+              http_parser *parser = &client->parser;
+              parsed = (ssize_t)http_parser_execute(parser, &client->parser_settings, buf->base, nread);
+
+              LOGI("parsed: ", parsed);
+              if (parser->upgrade) {
+                LOGE("raise upgrade unsupported");
+                client->emit("error");
+                return;
+              } else if (parsed != nread) {
+                LOGE("http parse error. ", parsed," parsed of", nread);
+                LOGE(http_errno_description(HTTP_PARSER_ERRNO(parser)));
+                client->emit("error");
+                return;
+              }
+            } else {
+              if (nread != UV_EOF) {
+                LOGE("uv_read_cb", uv_err_name(nread), uv_strerror(nread));
+                client->emit("error");
+                return;
+              }
+            }
+
+            //LOGI(buf->base);
+
+            free(buf->base);
+        });
+
+        if (r != 0) {
+          LOGE("uv_read_start", uv_err_name(r), uv_strerror(r));
+          client->emit("error");
+          return;
+        }
 
         uv_buf_t resbuf;
         string res = client->options["method"] + " " + client->options["path"] + " " + "HTTP/1.1\r\n";
@@ -219,51 +268,28 @@ class SimpleHttpRequest {
         resbuf.base = (char *)res.c_str();
         resbuf.len = res.size();
 
-        int r = uv_read_start(req->handle, client->allocCb,
-          [](uv_stream_t *tcp, ssize_t nread, const uv_buf_t * buf) {
-            ssize_t parsed;
-            SimpleHttpRequest* client = (SimpleHttpRequest*)tcp->data;
-            LOGI("onRead ", nread);
-            LOGI("buf len: ",buf->len);
-            if (nread > 0) {
-              http_parser *parser = &client->parser;
-              parsed = (ssize_t)http_parser_execute(parser, &client->parser_settings, buf->base, nread);
-
-              LOGI("parsed: ", parsed);
-              if (parser->upgrade) {
-                LOGI("raise upgrade error!!");
-              } else if (parsed != nread) {
-                LOGI("parsed ", parsed,"/", nread);
-                LOGI("%s\n", http_errno_description(HTTP_PARSER_ERRNO(parser)));
-              }
-            } else {
-              if (nread != UV_EOF) {
-                LOGE("read error ", uv_err_name(nread));
-              }
-            }
-
-            //LOGI(buf->base);
-
-            free(buf->base);
-          });
-
-        if (r)
-          LOGE("uv_write uv_read_start ", uv_err_name(r));
-
         r = uv_write(&client->write_req, req->handle, &resbuf, 1,
-          [](uv_write_t* /*req*/, int status) {
-            LOGI("after write");
-            if (status)
-              LOGE("uv_write_t ", uv_err_name(status));
-          });
+          [](uv_write_t* req, int status) {
+            SimpleHttpRequest* client = (SimpleHttpRequest*)req->data;
+            LOGI("uv_write");
+            if (status != 0) {
+              LOGE("uv_write_cb", uv_err_name(status), uv_strerror(status));
+              client->emit("error");
+              return;
+            }
+        });
 
-        if (r) {
-          LOGE("uv_write error ", uv_err_name(r));
+        if (r != 0) {
+          LOGE("uv_write", uv_err_name(r), uv_strerror(r));
+          client->emit("error");
+          return;
         }
-      });
+    });
 
-    if (r) {
-      LOGE("uv_tcp_connect error ", uv_err_name(r));
+    if (r != 0) {
+      LOGE("uv_tcp_connect", uv_err_name(r), uv_strerror(r));
+      this->emit("error");
+      return;
     }
   }
 
