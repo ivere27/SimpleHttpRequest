@@ -1,4 +1,7 @@
+#include <iostream>
 #include "SimpleHttpRequest.h"
+
+using namespace std;
 
 int main() {
   int r;
@@ -17,6 +20,9 @@ int main() {
   request.on("error", [](){
     cerr << endl << "on error" << endl;
   }).on("response", [&request](){
+    for (const auto &kv : request.responseHeaders)
+      cout << kv.first << " : " << kv.second << endl;
+
     cout << request.responseBody.str().c_str();
   }).end();
 
