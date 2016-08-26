@@ -9,7 +9,7 @@ This is experimental yet.
 * make https://github.com/nodejs/http-parser
 * then (replace the paths with your ones),
 ```bash
-$ clang++ SimpleHttpRequest.cpp --std=c++11 \
+$ clang++ example.cpp --std=c++11 \
 -I../http-parser/ -I../libuv/include/ \
 -lpthread  \
 ../libuv/.libs/libuv.a \
