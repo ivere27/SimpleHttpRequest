@@ -94,12 +94,20 @@ class SimpleHttpRequest {
       LOGI("Header value: ", string(buf,len));
 
       SimpleHttpRequest *client = (SimpleHttpRequest*)p->data;
+
+      //on_header_value called without on_header_field
+      if (client->lastHeaderFieldBuf == NULL) {
+        LOGI("broken header field.");
+        return 0;
+      }
+
       string field = string(client->lastHeaderFieldBuf, client->lastHeaderFieldLenth);
       string value = string(buf, len);
 
       transform(field.begin(), field.end(), field.begin(), ::tolower);
       client->responseHeaders[field] = value;
 
+      client->lastHeaderFieldBuf = NULL;
       return 0;
     };
     parser_settings.on_headers_complete = [](http_parser *p) {
