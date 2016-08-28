@@ -125,9 +125,6 @@ class SimpleHttpRequest {
       //fprintf("Body: %.*s\n", (int)length, at);
       if (http_body_is_final(parser)) {
           LOGI("http_body_is_final");
-          //LOGI(client->responseBody.str().c_str());
-
-          client->emit("response");
       } else {
       }
 
@@ -145,6 +142,12 @@ class SimpleHttpRequest {
           uv_close((uv_handle_t*)tcp, client->onClose);
       }
       LOGI("status code : ", ::to_string(parser->status_code));
+
+      // response should be called after on_message_complete
+      //LOGI(client->responseBody.str().c_str());
+      client->statusCode = parser->status_code;
+      client->emit("response");
+
       return 0;
     };
   }
@@ -309,6 +312,7 @@ class SimpleHttpRequest {
 
   map<string, string> responseHeaders;
   stringstream responseBody;
+  unsigned int statusCode = 0;
  private:
   uv_loop_t* uv_loop;
 
