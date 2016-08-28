@@ -55,14 +55,14 @@ using Callback = std::map<std::string, std::function<void(T...)>>;
 
 class SimpleHttpRequest {
  public:
-  SimpleHttpRequest(map<string, string> &options, map<string, string> &requestHeaders, uv_loop_t *loop) {
-    uv_loop = loop;
-
-    // FIXME : pointer
-    this->options = options;
-    this->requestHeaders = requestHeaders;
-
-
+  SimpleHttpRequest(map<string, string> &options, uv_loop_t *loop) :  SimpleHttpRequest(loop) {
+   this->options = options;
+  }
+  SimpleHttpRequest(map<string, string> &options, map<string, string> &requestHeaders, uv_loop_t *loop) :  SimpleHttpRequest(loop) {
+   this->options = options;
+   this->requestHeaders = requestHeaders;
+  }
+  SimpleHttpRequest(uv_loop_t *loop) : uv_loop(loop) {
     allocCb = [](uv_handle_t* handle, size_t size, uv_buf_t* buf) {
       buf->base = (char*)malloc(size);
       buf->len = size;
