@@ -55,12 +55,12 @@ using Callback = std::map<std::string, std::function<void(T...)>>;
 
 class SimpleHttpRequest {
  public:
-  SimpleHttpRequest(map<string, string> &options, map<string, string> &headers, uv_loop_t *loop) {
+  SimpleHttpRequest(map<string, string> &options, map<string, string> &requestHeaders, uv_loop_t *loop) {
     uv_loop = loop;
 
     // FIXME : pointer
     this->options = options;
-    this->headers = headers;
+    this->requestHeaders = requestHeaders;
 
 
     allocCb = [](uv_handle_t* handle, size_t size, uv_buf_t* buf) {
@@ -172,7 +172,7 @@ class SimpleHttpRequest {
 
   //FIXME : send directly later when tcp is open
   SimpleHttpRequest& write(const std::istream &stream) {
-    this->headers["content-type"] = "application/octet-stream";
+    this->requestHeaders["content-type"] = "application/octet-stream";
     requestBody << stream.rdbuf();
 
     return *this;
@@ -183,6 +183,12 @@ class SimpleHttpRequest {
   }
   SimpleHttpRequest& write(string data) {
     requestBody << data;
+
+    return *this;
+  }
+
+  SimpleHttpRequest& setHeader(string field, string value) {
+    this->requestHeaders[field] = value;
 
     return *this;
   }
@@ -263,7 +269,7 @@ class SimpleHttpRequest {
 
         uv_buf_t resbuf;
         string res = client->options["method"] + " " + client->options["path"] + " " + "HTTP/1.1\r\n";
-        for (const auto &kv : client->headers) {
+        for (const auto &kv : client->requestHeaders) {
           res += kv.first + ":" + kv.second + "\r\n";
         }
         if (client->requestBody.str().size() > 0) {
@@ -321,7 +327,7 @@ class SimpleHttpRequest {
   Callback<> eventListeners;
 
   map<string, string> options;
-  map<string, string> headers;
+  map<string, string> requestHeaders;
 
   char* lastHeaderFieldBuf;
   int lastHeaderFieldLenth;
