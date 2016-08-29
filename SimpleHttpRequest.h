@@ -184,16 +184,35 @@ class SimpleHttpRequest {
     requestBody.rdbuf()->sputn(s, n);
     return *this;
   }
-  SimpleHttpRequest& write(string data) {
+  SimpleHttpRequest& write(const string &data) {
     requestBody << data;
 
     return *this;
   }
 
-  SimpleHttpRequest& setHeader(string field, string value) {
+  SimpleHttpRequest& setHeader(const string &field, const string &value) {
     this->requestHeaders[field] = value;
 
     return *this;
+  }
+
+  // GET/HEAD verb
+  SimpleHttpRequest& get(const string &url) {
+    return _get(url, "GET");
+  }
+  SimpleHttpRequest& head(const string &url) {
+    return _get(url, "HEAD");
+  }
+
+  // POST/PUT verbs with payloads. 'DELETE' is reserved in c. so, use 'del()'
+  SimpleHttpRequest& post(const string &url, const string &body) {
+    return _post(url, "POST", body);
+  }
+  SimpleHttpRequest& put(const string &url, const string &body) {
+    return _post(url, "PUT", body);
+  }
+  SimpleHttpRequest& del(const string &url, const string &body) {
+    return _post(url, "DELETE", body);
   }
 
   void end() {
@@ -335,4 +354,50 @@ class SimpleHttpRequest {
 
   char* lastHeaderFieldBuf;
   int lastHeaderFieldLenth;
+
+  SimpleHttpRequest& _get(const string &url, const string &method) {
+    options["method"] = method;
+    if(!_parseUrl(url)) {
+      //FIXME : logic error. on("error") may be next. USE uv_loop!!
+      this->emit("error");
+    }
+    return *this;
+  }
+  SimpleHttpRequest& _post(const string &url, const string &method, const string& body) {
+    options["method"] = method;
+    if(!_parseUrl(url)) {
+      this->emit("error");  //FIXME : logic error.
+    }
+    this->write(body);
+    return *this;
+  }
+
+  bool _parseUrl(const string &url) {
+    struct http_parser_url u;
+    http_parser_url_init(&u);
+
+    if (http_parser_parse_url(url.c_str(), url.length(), 0, &u)) {
+      LOGE("failed to parse URL - ", url);
+      return false;
+    }
+
+    options["hostname"] = url.substr(u.field_data[UF_HOST].off, u.field_data[UF_HOST].len);
+    options["port"] = url.substr(u.field_data[UF_PORT].off, u.field_data[UF_PORT].len);
+    options["path"] = url.substr(u.field_data[UF_PATH].off, u.field_data[UF_PATH].len);
+
+    if(options["port"].length() == 0) {
+      auto protocol = url.substr(u.field_data[UF_SCHEMA].off, u.field_data[UF_SCHEMA].len);
+
+      // FIXME : well-known protocols
+      if (protocol.compare("http") == 0) {
+        options["port"] = "80";
+      } else if (protocol.compare("https") == 0) {
+        options["port"] = "443";
+      } else {
+        options["port"] = "0";
+      }
+    }
+
+    return true;
+  }
 };
