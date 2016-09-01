@@ -7,15 +7,21 @@ c++11 http client based on libuv and http-parser
 This is experimental yet.
 
 
-* make https://github.com/libuv/libuv
-* make https://github.com/nodejs/http-parser
-* then (replace the paths with your ones),
+* git clone with submodules.
+```bash
+git clone --recursive https://github.com/ivere27/SimpleHttpRequest.git
+cd SimpleHttpRequest/http-parser && make
+cd ../..
+cd SimpleHttpRequest/libuv && ./autogen.sh && ./configure && make
+```
+
+* test the example.cpp
 ```bash
 $ clang++ example.cpp --std=c++11 \
--I../http-parser/ -I../libuv/include/ \
+-I./http-parser/ -I./libuv/include/ \
 -lpthread  \
-../libuv/.libs/libuv.a \
-../http-parser/http_parser.o && DEBUG=1 ./a.out
+./libuv/.libs/libuv.a \
+./http-parser/http_parser.o && DEBUG=1 ./a.out
 ```
 
 # License
