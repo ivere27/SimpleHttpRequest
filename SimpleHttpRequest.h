@@ -425,6 +425,10 @@ class SimpleHttpRequest {
       }
     }
 
+    if (options["path"].length() == 0) {
+      options["path"] = "/";
+    }
+
     return true;
   }
 };
