@@ -12,7 +12,8 @@ int main() {
 #if 1
   // request.get(url)
   SimpleHttpRequest request(uv_loop);
-  request.get("http://192.168.10.9:10509/archive")
+  request.timeout = 1000;
+  request.get("http://127.0.0.1:10509/archive")
   .on("error", [](){
     cerr << endl << "on error" << endl;
   }).on("response", [&request](){
@@ -58,7 +59,7 @@ int main() {
 
 
 #if 0
-// request(options, headers) POST
+// request(options, headers) POST write(string)
   map<string, string> options;
   map<string, string> headers;
   options["hostname"] = "192.168.10.9";
@@ -76,6 +77,30 @@ int main() {
     cout << request.responseBody.str() << endl;
   });
   request.write("{\"archive\":3}");
+  request.end();
+#endif
+
+#if 0
+// request(options, headers) POST write(stream)
+  map<string, string> options;
+  map<string, string> headers;
+  options["hostname"] = "192.168.10.9";
+  options["port"] = "10509";
+  options["path"] = "/archive";
+  options["method"] = "POST";
+  headers["content-type"] = "application/json"; // ignored!!
+
+  stringstream body;
+  body << "{\"archive\":3}";
+  SimpleHttpRequest request(options, headers, uv_loop);
+  request.on("error", [](){
+    cout << endl << "on error" << endl;
+  });
+  request.on("response", [&request](){
+    cout << endl << request.statusCode << endl;
+    cout << request.responseBody.str() << endl;
+  });
+  request.write(body);  //contnet-type = "application/octet-stream"
   request.end();
 #endif
 
