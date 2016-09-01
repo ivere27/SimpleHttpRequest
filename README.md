@@ -1,6 +1,8 @@
 # SimpleHttpRequest
 
-c++11 http client based on libuv
+a project of 'Second Compiler'.
+
+c++11 http client based on libuv and http-parser
 
 This is experimental yet.
 
@@ -15,3 +17,7 @@ $ clang++ example.cpp --std=c++11 \
 ../libuv/.libs/libuv.a \
 ../http-parser/http_parser.o && DEBUG=1 ./a.out
 ```
+
+# License
+
+MIT
