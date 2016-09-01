@@ -2,7 +2,8 @@
 
 a project of 'Second Compiler'.
 
-c++11 http client based on libuv and http-parser
+* c++11 http client based on libuv and http-parser only
+* one header file
 
 This is experimental yet.
 
