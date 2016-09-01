@@ -142,7 +142,7 @@ class SimpleHttpRequest {
     parser_settings.on_message_complete = [](http_parser* parser) {
       LOGI("on_message_complete");
       SimpleHttpRequest *client = (SimpleHttpRequest*)parser->data;
-      ssize_t total_len = client->responseBody.str().size();
+      ssize_t total_len = client->responseBody.tellp();
       LOGI("total_len: ",total_len);
       if (http_should_keep_alive(parser)) {
           LOGI("http_should_keep_alive");
@@ -152,7 +152,7 @@ class SimpleHttpRequest {
       LOGI("status code : ", ::to_string(parser->status_code));
 
       // response should be called after on_message_complete
-      //LOGI(client->responseBody.str().c_str());
+      //LOGI(client->responseBody.tellp());
       client->statusCode = parser->status_code;
       client->emit("response");
 
@@ -311,19 +311,23 @@ class SimpleHttpRequest {
         }
 
         uv_buf_t resbuf;
-        string res = client->options["method"] + " " + client->options["path"] + " " + "HTTP/1.1\r\n";
+        stringstream res;
+        res << client->options["method"] << " " << client->options["path"] << " " << "HTTP/1.1\r\n";
         for (const auto &kv : client->requestHeaders) {
-          res += kv.first + ":" + kv.second + "\r\n";
+          res << kv.first << ":" << kv.second << "\r\n";
         }
-        if (client->requestBody.str().size() > 0) {
-          res += "Content-Length: " + ::to_string(client->requestBody.str().size()) + "\r\n";
-          res += "\r\n";
-          res += client->requestBody.str();
+        if (client->requestBody.tellp() > 0) {
+          res << "Content-Length: " << ::to_string(client->requestBody.tellp()) << "\r\n";
+          res << "\r\n";
+          res << client->requestBody.rdbuf();
         } else {
-          res += "\r\n";
+          res << "\r\n";
         }
-        resbuf.base = (char *)res.c_str();
-        resbuf.len = res.size();
+
+        // FIXME : expensive to copy.
+        string resString = res.str();
+        resbuf.base = (char *)resString.c_str();
+        resbuf.len = res.tellp();
 
         r = uv_write(&client->write_req, req->handle, &resbuf, 1,
           [](uv_write_t* req, int status) {
