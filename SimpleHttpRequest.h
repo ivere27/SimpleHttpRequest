@@ -18,16 +18,22 @@ using namespace std;
 
 static uv_loop_t* uv_loop;
 
+#if defined(NDEBUG)
+# define ASSERT(exp)
+#else
+# define ASSERT(exp)  assert(exp)
+#endif
+
 // FIXME : to stderr with __LINE__, __PRETTY_FUNCTION__ ?
 #define LOGE(...) LOGI(__VA_ARGS__)
 void _LOGI(){}
 template <typename T, typename ...Args>
 void _LOGI(T t, Args && ...args)
 {
-    if (getenv("SECC_LOG")) {
+    if (getenv("DEBUG_LOG")) {
     try {
       std::ofstream logFile;
-      logFile.open(getenv("SECC_LOG"), std::ios::out | std::ios::app);
+      logFile.open(getenv("DEBUG_LOG"), std::ios::out | std::ios::app);
       logFile << std::forward<T>(t);
       logFile.close();
     } catch(const std::exception &e) {
@@ -69,8 +75,10 @@ class SimpleHttpRequest {
     };
 
     onClose = [](uv_handle_t* handle) {
+      SimpleHttpRequest *client = (SimpleHttpRequest*)handle->data;
       LOGI("onClose");
       handle->data = NULL;
+      uv_close((uv_handle_t*)&client->timer, [](uv_handle_t*){});
     };
 
     http_parser_init(&parser, HTTP_RESPONSE);
@@ -234,6 +242,19 @@ class SimpleHttpRequest {
     connect_req.data = this;
     parser.data = this;
     write_req.data = this;
+    timer.data = this;
+
+    r = uv_timer_init(uv_loop, &timer);
+    ASSERT(r == 0);
+
+    r = uv_timer_start(&timer, [](uv_timer_t* timer){
+      SimpleHttpRequest *client = (SimpleHttpRequest*)timer->data;
+      uv_close((uv_handle_t*)timer, [](uv_handle_t*){});
+      uv_close((uv_handle_t*)&client->tcp, [](uv_handle_t*){});
+
+      client->emit("error");
+    }, timeout, 0);
+    ASSERT(r == 0);
 
     r = uv_tcp_connect(&connect_req, &tcp, reinterpret_cast<const sockaddr*>(&addr),
       [](uv_connect_t *req, int status) {
@@ -332,6 +353,7 @@ class SimpleHttpRequest {
   map<string, string> responseHeaders;
   stringstream responseBody;
   unsigned int statusCode = 0;
+  unsigned int timeout = 60*2*1000; // 2 minutes default.
  private:
   uv_loop_t* uv_loop;
 
@@ -339,6 +361,7 @@ class SimpleHttpRequest {
   uv_tcp_t tcp;
   uv_connect_t connect_req;
   uv_write_t write_req;
+  uv_timer_t timer;
 
   http_parser_settings parser_settings;
   http_parser parser;
