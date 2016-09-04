@@ -140,10 +140,8 @@ class SimpleHttpRequest {
     };
 
     parser_settings.on_message_complete = [](http_parser* parser) {
-      LOGI("on_message_complete");
       SimpleHttpRequest *client = (SimpleHttpRequest*)parser->data;
-      ssize_t total_len = client->responseBody.tellp();
-      LOGI("total_len: ",total_len);
+      LOGI("on_message_complete. response size: ", client->responseBody.tellp());
       if (http_should_keep_alive(parser)) {
           LOGI("http_should_keep_alive");
           uv_stream_t* tcp = (uv_stream_t*)&client->tcp;
