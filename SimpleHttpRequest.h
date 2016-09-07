@@ -16,6 +16,9 @@
 
 using namespace std;
 
+namespace request
+{
+
 static uv_loop_t* uv_loop;
 
 #if defined(NDEBUG)
@@ -30,7 +33,7 @@ void _LOGI(){}
 template <typename T, typename ...Args>
 void _LOGI(T t, Args && ...args)
 {
-    if (getenv("DEBUG_LOG")) {
+  if (getenv("DEBUG_LOG")) {
     try {
       std::ofstream logFile;
       logFile.open(getenv("DEBUG_LOG"), std::ios::out | std::ios::app);
@@ -89,6 +92,9 @@ class SimpleHttpRequest {
   SimpleHttpRequest(map<string, string> &options, map<string, string> &requestHeaders, uv_loop_t *loop) :  SimpleHttpRequest(loop) {
    this->options = options;
    this->requestHeaders = requestHeaders;
+  }
+  SimpleHttpRequest() : SimpleHttpRequest(uv_default_loop()) {
+    _defaultLoopAbsented = true;
   }
   SimpleHttpRequest(uv_loop_t *loop) : uv_loop(loop) {
     allocCb = [](uv_handle_t* handle, size_t size, uv_buf_t* buf) {
@@ -399,6 +405,7 @@ class SimpleHttpRequest {
   unsigned int timeout = 60*2*1000; // 2 minutes default.
  private:
   uv_loop_t* uv_loop;
+  bool _defaultLoopAbsented = false;
 
   sockaddr_in addr;
   uv_tcp_t tcp;
@@ -473,3 +480,5 @@ class SimpleHttpRequest {
     return true;
   }
 };
+
+} // end of namespace
