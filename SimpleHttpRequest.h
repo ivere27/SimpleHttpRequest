@@ -56,9 +56,31 @@ void LOGI(T t, Args && ...args)
 }
 
 
+// declares
+class Error;
+class Response;
+class SimpleHttpRequest;
+
 template<class... T>
 using Callback = std::map<std::string, std::function<void(T...)>>;
 
+// Error
+class Error {
+public:
+  Error(){};
+  Error(string name, string message) : name(name), message(message) {};
+  string name;
+  string message;
+};
+
+// Response
+class Response : public ostringstream {
+public:
+  unsigned int statusCode = 0;
+  map<string, string> headers;
+};
+
+// Http Client
 class SimpleHttpRequest {
  public:
   SimpleHttpRequest(map<string, string> &options, uv_loop_t *loop) :  SimpleHttpRequest(loop) {
@@ -113,7 +135,7 @@ class SimpleHttpRequest {
       string value = string(buf, len);
 
       transform(field.begin(), field.end(), field.begin(), ::tolower);
-      client->responseHeaders[field] = value;
+      client->response.headers[field] = value;
 
       client->lastHeaderFieldBuf = NULL;
       return 0;
@@ -128,7 +150,7 @@ class SimpleHttpRequest {
     parser_settings.on_body = [](http_parser* parser, const char* buf, size_t len) {
       SimpleHttpRequest *client = (SimpleHttpRequest*)parser->data;
       if (buf)
-        client->responseBody.rdbuf()->sputn(buf, len);
+        client->response.rdbuf()->sputn(buf, len);
 
       //fprintf("Body: %.*s\n", (int)length, at);
       if (http_body_is_final(parser)) {
@@ -141,7 +163,7 @@ class SimpleHttpRequest {
 
     parser_settings.on_message_complete = [](http_parser* parser) {
       SimpleHttpRequest *client = (SimpleHttpRequest*)parser->data;
-      LOGI("on_message_complete. response size: ", client->responseBody.tellp());
+      LOGI("on_message_complete. response size: ", client->response.tellp());
       if (http_should_keep_alive(parser)) {
           LOGI("http_should_keep_alive");
           uv_stream_t* tcp = (uv_stream_t*)&client->tcp;
@@ -150,8 +172,8 @@ class SimpleHttpRequest {
       LOGI("status code : ", ::to_string(parser->status_code));
 
       // response should be called after on_message_complete
-      //LOGI(client->responseBody.tellp());
-      client->statusCode = parser->status_code;
+      //LOGI(client->response.tellp());
+      client->response.statusCode = parser->status_code;
       client->emit("response");
 
       return 0;
@@ -159,16 +181,33 @@ class SimpleHttpRequest {
   }
   ~SimpleHttpRequest() {}
 
-  //FIXME : variadic ..Args
-  SimpleHttpRequest& emit(string name) {
-    if (eventListeners.count(name))
+  //FIXME : variadic ..Args using tuple.
+  template <typename... Args>
+  SimpleHttpRequest& emit(string name, Args... args) {
+    if (name.compare("response") == 0 && responseCallback != NULL)
+      responseCallback(std::forward<Response>(response));
+    else if (name.compare("error") == 0 && errorCallback != NULL)
+      errorCallback(std::move(Error(args...)));
+    else if (eventListeners.count(name))
       eventListeners[name]();
 
     return *this;
   }
 
-  template <class... Args>
-  SimpleHttpRequest& on(string name, std::function<void()> func) {
+  SimpleHttpRequest& on(string name, std::function<void(Response&&)> func) {
+    if (name.compare("response") == 0)
+      responseCallback = func;
+
+    return *this;
+  }
+  SimpleHttpRequest& on(string name, std::function<void(Error&&)> func) {
+    if (name.compare("error") == 0)
+      errorCallback = func;
+
+    return *this;
+  }
+  template <typename... Args>
+  SimpleHttpRequest& on(string name, std::function<void(Args...)> func) {
     eventListeners[name] = func;
 
     return *this;
@@ -224,15 +263,15 @@ class SimpleHttpRequest {
   void end() {
     int r = uv_ip4_addr(options["hostname"].c_str(), stoi(options["port"]), &addr);
     if (r != 0) {
-      LOGE("uv_ip4_addr", uv_err_name(r), uv_strerror(r));
-      this->emit("error");
+      LOGE("uv_ip4_addr");
+      this->emit("error", uv_err_name(r), uv_strerror(r));
       return;
     }
 
     r = uv_tcp_init(uv_loop, &tcp);
     if (r != 0) {
-      LOGE("uv_tcp_init", uv_err_name(r), uv_strerror(r));
-      this->emit("error");
+      LOGE("uv_tcp_init");
+      this->emit("error", uv_err_name(r), uv_strerror(r));
       return;
     }
 
@@ -250,7 +289,7 @@ class SimpleHttpRequest {
       uv_close((uv_handle_t*)timer, [](uv_handle_t*){});
       uv_close((uv_handle_t*)&client->tcp, [](uv_handle_t*){});
 
-      client->emit("error");
+      client->emit("error", "ETIMEDOUT", "connection timed out");
     }, timeout, 0);
     ASSERT(r == 0);
 
@@ -259,8 +298,8 @@ class SimpleHttpRequest {
         SimpleHttpRequest *client = (SimpleHttpRequest*)req->data;
         if (status != 0) {
             uv_close((uv_handle_t*)req->handle, client->onClose);
-            LOGE("uv_connect_cb", uv_err_name(status), uv_strerror(status));
-            client->emit("error");
+            LOGE("uv_connect_cb");
+            client->emit("error", uv_err_name(status), uv_strerror(status));
             return;
         }
 
@@ -281,18 +320,18 @@ class SimpleHttpRequest {
               LOGI("parsed: ", parsed);
               if (parser->upgrade) {
                 LOGE("raise upgrade unsupported");
-                client->emit("error");
+                client->emit("error", "upgrade", "upgrade is not supported");
                 return;
               } else if (parsed != nread) {
                 LOGE("http parse error. ", parsed," parsed of", nread);
                 LOGE(http_errno_description(HTTP_PARSER_ERRNO(parser)));
-                client->emit("error");
+                client->emit("error", "httpparse", "http parser error");
                 return;
               }
             } else {
               if (nread != UV_EOF) {
-                LOGE("uv_read_cb", uv_err_name(nread), uv_strerror(nread));
-                client->emit("error");
+                LOGE("uv_read_cb");
+                client->emit("error", uv_err_name(nread), uv_strerror(nread));
                 return;
               }
             }
@@ -303,8 +342,8 @@ class SimpleHttpRequest {
         });
 
         if (r != 0) {
-          LOGE("uv_read_start", uv_err_name(r), uv_strerror(r));
-          client->emit("error");
+          LOGE("uv_read_start");
+          client->emit("error", uv_err_name(r), uv_strerror(r));
           return;
         }
 
@@ -332,29 +371,31 @@ class SimpleHttpRequest {
             SimpleHttpRequest* client = (SimpleHttpRequest*)req->data;
             LOGI("uv_write");
             if (status != 0) {
-              LOGE("uv_write_cb", uv_err_name(status), uv_strerror(status));
-              client->emit("error");
+              LOGE("uv_write_cb");
+              client->emit("error", uv_err_name(status), uv_strerror(status));
               return;
             }
         });
 
         if (r != 0) {
-          LOGE("uv_write", uv_err_name(r), uv_strerror(r));
-          client->emit("error");
+          LOGE("uv_write");
+          client->emit("error", uv_err_name(r), uv_strerror(r));
           return;
         }
     });
 
     if (r != 0) {
-      LOGE("uv_tcp_connect", uv_err_name(r), uv_strerror(r));
-      this->emit("error");
+      LOGE("uv_tcp_connect");
+      this->emit("error", uv_err_name(r), uv_strerror(r));
       return;
+    }
+
+    if (_defaultLoopAbsented) {
+      uv_run(uv_loop, UV_RUN_DEFAULT);
     }
   }
 
-  map<string, string> responseHeaders;
-  stringstream responseBody;
-  unsigned int statusCode = 0;
+  Response response;
   unsigned int timeout = 60*2*1000; // 2 minutes default.
  private:
   uv_loop_t* uv_loop;
@@ -373,6 +414,8 @@ class SimpleHttpRequest {
   uv_close_cb onClose;
 
   Callback<> eventListeners;
+  std::function<void(Response&&)> responseCallback = NULL;
+  std::function<void(Error&&)> errorCallback = NULL;
 
   map<string, string> options;
   map<string, string> requestHeaders;
@@ -384,14 +427,14 @@ class SimpleHttpRequest {
     options["method"] = method;
     if(!_parseUrl(url)) {
       //FIXME : logic error. on("error") may be next. USE uv_loop!!
-      this->emit("error");
+      this->emit("error", "parseUrl", "parseUrl");
     }
     return *this;
   }
   SimpleHttpRequest& _post(const string &url, const string &method, const string& body) {
     options["method"] = method;
     if(!_parseUrl(url)) {
-      this->emit("error");  //FIXME : logic error.
+      this->emit("error", "parseUrl", "parseUrl");  //FIXME : logic error.
     }
     this->write(body);
     return *this;
