@@ -1,12 +1,12 @@
 #include <iostream>
 #include "SimpleHttpRequest.h"
 
+using namespace std;
+using namespace request;
+
 const string HOSTNAME = "127.0.0.1";
 const string PORT = "10509";
 const string PATH = "/archive";
-
-using namespace std;
-using namespace request;
 
 int main() {
 

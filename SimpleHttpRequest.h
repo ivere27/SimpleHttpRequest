@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SIMPLE_HTTP_REQUEST_H_
+#define SIMPLE_HTTP_REQUEST_H_
 
 #include <algorithm>
 #include <cassert>
@@ -14,12 +15,8 @@
 #include "uv.h"
 #include "http_parser.h"
 
+namespace request {
 using namespace std;
-
-namespace request
-{
-
-static uv_loop_t* uv_loop;
 
 #if defined(NDEBUG)
 # define ASSERT(exp)
@@ -52,7 +49,7 @@ void LOGI(T t, Args && ...args)
 {
   if (!getenv("DEBUG")) return;
 
-  _LOGI("[" + ::to_string(getpid()) + "] ");  // insert pid
+  _LOGI("[" + std::to_string(getpid()) + "] ");  // insert pid
   _LOGI(std::forward<T>(t));
   _LOGI(std::forward<Args>(args)...);
   _LOGI('\n');
@@ -66,6 +63,12 @@ class SimpleHttpRequest;
 
 template<class... T>
 using Callback = std::map<std::string, std::function<void(T...)>>;
+
+static uv_loop_t* uv_loop;
+static uv_alloc_cb uvAllocCb = [](uv_handle_t* handle, size_t size, uv_buf_t* buf) {
+  buf->base = (char*)malloc(size);
+  buf->len = size;
+};;
 
 // Error
 class Error {
@@ -87,20 +90,16 @@ public:
 class SimpleHttpRequest {
  public:
   SimpleHttpRequest(map<string, string> &options, uv_loop_t *loop) :  SimpleHttpRequest(loop) {
-   this->options = options;
+    this->options = options;
   }
   SimpleHttpRequest(map<string, string> &options, map<string, string> &requestHeaders, uv_loop_t *loop) :  SimpleHttpRequest(loop) {
-   this->options = options;
-   this->requestHeaders = requestHeaders;
+    this->options = options;
+    this->requestHeaders = requestHeaders;
   }
   SimpleHttpRequest() : SimpleHttpRequest(uv_default_loop()) {
     _defaultLoopAbsented = true;
   }
   SimpleHttpRequest(uv_loop_t *loop) : uv_loop(loop) {
-    allocCb = [](uv_handle_t* handle, size_t size, uv_buf_t* buf) {
-      buf->base = (char*)malloc(size);
-      buf->len = size;
-    };
 
     onClose = [](uv_handle_t* handle) {
       SimpleHttpRequest *client = (SimpleHttpRequest*)handle->data;
@@ -175,7 +174,7 @@ class SimpleHttpRequest {
           uv_stream_t* tcp = (uv_stream_t*)&client->tcp;
           uv_close((uv_handle_t*)tcp, client->onClose);
       }
-      LOGI("status code : ", ::to_string(parser->status_code));
+      LOGI("status code : ", std::to_string(parser->status_code));
 
       // response should be called after on_message_complete
       //LOGI(client->response.tellp());
@@ -313,7 +312,7 @@ class SimpleHttpRequest {
           client->options["hostname"].c_str(),
           ":",client->options["port"].c_str());
 
-        int r = uv_read_start(req->handle, client->allocCb,
+        int r = uv_read_start(req->handle, uvAllocCb,
           [](uv_stream_t *tcp, ssize_t nread, const uv_buf_t * buf) {
             ssize_t parsed;
             SimpleHttpRequest* client = (SimpleHttpRequest*)tcp->data;
@@ -360,7 +359,7 @@ class SimpleHttpRequest {
           res << kv.first << ":" << kv.second << "\r\n";
         }
         if (client->requestBody.tellp() > 0) {
-          res << "Content-Length: " << ::to_string(client->requestBody.tellp()) << "\r\n";
+          res << "Content-Length: " << std::to_string(client->requestBody.tellp()) << "\r\n";
           res << "\r\n";
           res << client->requestBody.rdbuf();
         } else {
@@ -417,7 +416,6 @@ class SimpleHttpRequest {
   http_parser parser;
   stringstream requestBody;
 
-  uv_alloc_cb allocCb;
   uv_close_cb onClose;
 
   Callback<> eventListeners;
@@ -481,4 +479,6 @@ class SimpleHttpRequest {
   }
 };
 
-} // end of namespace
+} // namespace request
+
+#endif // SIMPLE_HTTP_REQUEST_H_

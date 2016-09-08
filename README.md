@@ -18,7 +18,7 @@ cd SimpleHttpRequest/libuv && ./autogen.sh && ./configure && make
 
 * test the example.cpp
 ```bash
-$ clang++ example.cpp --std=c++11 \
+$ g++ example.cpp --std=c++11 \
 -I./http-parser/ -I./libuv/include/ \
 -lpthread  \
 ./libuv/.libs/libuv.a \
