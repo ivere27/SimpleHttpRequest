@@ -461,7 +461,6 @@ class SimpleHttpRequest {
   Callback<> eventListeners;
   std::function<void(Response&&)> responseCallback = NULL;
   std::function<void(Error&&)> errorCallback = NULL;
-  std::function<void(Error&&, Response&&)> errresCallback = NULL;
 
   map<string, string> options;
   map<string, string> requestHeaders;
