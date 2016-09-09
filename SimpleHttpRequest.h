@@ -106,7 +106,7 @@ class SimpleHttpRequest {
       SimpleHttpRequest *client = (SimpleHttpRequest*)handle->data;
       LOGI("onClose");
       handle->data = NULL;
-      uv_close((uv_handle_t*)&client->timer, [](uv_handle_t*){});
+      client->_clearTimer();
     };
 
     http_parser_init(&parser, HTTP_RESPONSE);
@@ -169,7 +169,7 @@ class SimpleHttpRequest {
 
     parser_settings.on_message_complete = [](http_parser* parser) {
       SimpleHttpRequest *client = (SimpleHttpRequest*)parser->data;
-      uv_close((uv_handle_t*)&client->timer, [](uv_handle_t*){});
+      client->_clearTimer();
 
       LOGI("on_message_complete. response size: ", client->response.tellp());
       if (http_should_keep_alive(parser)) {
@@ -275,7 +275,7 @@ class SimpleHttpRequest {
     ASSERT(r == 0);
     r = uv_timer_start(&timer, [](uv_timer_t* timer){
       SimpleHttpRequest *client = (SimpleHttpRequest*)timer->data;
-      uv_close((uv_handle_t*)timer, [](uv_handle_t*){});
+      client->_clearTimer();
       if (uv_is_closing((uv_handle_t*)&client->tcp) == 0)
         uv_close((uv_handle_t*)&client->tcp, [](uv_handle_t*){});
 
@@ -517,6 +517,11 @@ class SimpleHttpRequest {
     }
 
     return true;
+  }
+
+  void _clearTimer() {
+    if (uv_is_closing((uv_handle_t*)&this->timer) == 0)
+      uv_close((uv_handle_t*)&this->timer, [](uv_handle_t*){});
   }
 };
 
