@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <functional>
 #include <fstream>
 #include <iostream>
@@ -266,11 +267,57 @@ class SimpleHttpRequest {
   }
 
   void end() {
-    int r = uv_ip4_addr(options["hostname"].c_str(), stoi(options["port"]), &addr);
+    int r = 0;
+
+    r = uv_timer_init(uv_loop, &timer);
+    ASSERT(r == 0);
+    r = uv_timer_start(&timer, [](uv_timer_t* timer){
+      SimpleHttpRequest *client = (SimpleHttpRequest*)timer->data;
+      uv_close((uv_handle_t*)timer, [](uv_handle_t*){});
+      if (uv_is_closing((uv_handle_t*)&client->tcp) == 0)
+        uv_close((uv_handle_t*)&client->tcp, [](uv_handle_t*){});
+
+      client->emit("error", "ETIMEDOUT", "connection timed out");
+    }, timeout, 0);
+    ASSERT(r == 0);
+
+    // determine 'hostname' whether IP address or Domain
+    struct sockaddr_in dest;
+    r = uv_ip4_addr(options["hostname"].c_str(), stoi(options["port"]), &dest);
     if (r != 0) {
-      LOGE("uv_ip4_addr");
-      this->emit("error", uv_err_name(r), uv_strerror(r));
-      return;
+      struct addrinfo hints;
+
+      memset(&hints, 0, sizeof(hints));
+      hints.ai_family = AF_INET;
+      hints.ai_socktype = SOCK_STREAM;
+      hints.ai_protocol = IPPROTO_TCP;
+
+      r = uv_getaddrinfo(uv_loop,
+                         &getaddrinfo_req,
+                         NULL,  // sync
+                         options["hostname"].c_str(),
+                         options["port"].c_str(),
+                         &hints);
+      if (r != 0) {
+        LOGE("uv_getaddrinfo");
+        this->emit("error", uv_err_name(r), uv_strerror(r));
+        return;
+      }
+
+      char ip[17] {'\0'};
+      r = uv_ip4_name((struct sockaddr_in*) getaddrinfo_req.addrinfo->ai_addr, ip, 16);
+      LOGI("hostname : ", options["hostname"], ", ip : ", ip);
+      uv_freeaddrinfo(getaddrinfo_req.addrinfo);
+
+      r = uv_ip4_addr(ip, stoi(options["port"]), &dest);
+      if (r != 0) {
+        LOGE("uv_ip4_addr");
+        this->emit("error", uv_err_name(r), uv_strerror(r));
+        return;
+      }
+
+      // let server knows the domain.
+      requestHeaders["host"] = options["hostname"];
     }
 
     r = uv_tcp_init(uv_loop, &tcp);
@@ -286,19 +333,7 @@ class SimpleHttpRequest {
     write_req.data = this;
     timer.data = this;
 
-    r = uv_timer_init(uv_loop, &timer);
-    ASSERT(r == 0);
-
-    r = uv_timer_start(&timer, [](uv_timer_t* timer){
-      SimpleHttpRequest *client = (SimpleHttpRequest*)timer->data;
-      uv_close((uv_handle_t*)timer, [](uv_handle_t*){});
-      uv_close((uv_handle_t*)&client->tcp, [](uv_handle_t*){});
-
-      client->emit("error", "ETIMEDOUT", "connection timed out");
-    }, timeout, 0);
-    ASSERT(r == 0);
-
-    r = uv_tcp_connect(&connect_req, &tcp, reinterpret_cast<const sockaddr*>(&addr),
+    r = uv_tcp_connect(&connect_req, &tcp, reinterpret_cast<const sockaddr*>(&dest),
       [](uv_connect_t *req, int status) {
         SimpleHttpRequest *client = (SimpleHttpRequest*)req->data;
         if (status != 0) {
@@ -406,7 +441,7 @@ class SimpleHttpRequest {
   uv_loop_t* uv_loop;
   bool _defaultLoopAbsented = false;
 
-  sockaddr_in addr;
+  uv_getaddrinfo_t getaddrinfo_req;
   uv_tcp_t tcp;
   uv_connect_t connect_req;
   uv_write_t write_req;
@@ -421,6 +456,7 @@ class SimpleHttpRequest {
   Callback<> eventListeners;
   std::function<void(Response&&)> responseCallback = NULL;
   std::function<void(Error&&)> errorCallback = NULL;
+  std::function<void(Error&&, Response&&)> errresCallback = NULL;
 
   map<string, string> options;
   map<string, string> requestHeaders;
