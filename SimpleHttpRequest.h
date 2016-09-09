@@ -337,10 +337,13 @@ class SimpleHttpRequest {
       [](uv_connect_t *req, int status) {
         SimpleHttpRequest *client = (SimpleHttpRequest*)req->data;
         if (status != 0) {
-            uv_close((uv_handle_t*)req->handle, client->onClose);
-            LOGE("uv_connect_cb");
-            client->emit("error", uv_err_name(status), uv_strerror(status));
-            return;
+          if (status == -89)  // ECANCELED by timer
+            return;           // do nothing
+
+          uv_close((uv_handle_t*)req->handle, client->onClose);
+          LOGE("uv_connect_cb");
+          client->emit("error", uv_err_name(status), uv_strerror(status));
+          return;
         }
 
         LOGI("TC connection established to ",
