@@ -169,6 +169,8 @@ class SimpleHttpRequest {
 
     parser_settings.on_message_complete = [](http_parser* parser) {
       SimpleHttpRequest *client = (SimpleHttpRequest*)parser->data;
+      uv_close((uv_handle_t*)&client->timer, [](uv_handle_t*){});
+
       LOGI("on_message_complete. response size: ", client->response.tellp());
       if (http_should_keep_alive(parser)) {
           LOGI("http_should_keep_alive");
@@ -338,7 +340,7 @@ class SimpleHttpRequest {
         SimpleHttpRequest *client = (SimpleHttpRequest*)req->data;
         if (status != 0) {
           if (status == -89)  // ECANCELED by timer
-            return;           // do nothing
+            return;           // handled. do nothing
 
           uv_close((uv_handle_t*)req->handle, client->onClose);
           LOGE("uv_connect_cb");
@@ -352,8 +354,8 @@ class SimpleHttpRequest {
 
         int r = uv_read_start(req->handle, uvAllocCb,
           [](uv_stream_t *tcp, ssize_t nread, const uv_buf_t * buf) {
-            ssize_t parsed;
             SimpleHttpRequest* client = (SimpleHttpRequest*)tcp->data;
+            ssize_t parsed;
             LOGI("onRead ", nread);
             LOGI("buf len: ", buf->len);
             if (nread > 0) {
