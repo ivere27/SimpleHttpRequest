@@ -4,11 +4,11 @@
 using namespace std;
 using namespace request;
 
-const string HOSTNAME = "127.0.0.1";
-const string PORT = "10509";
-const string PATH = "/archive";
+const string HOSTNAME = "www.google.com";
+const string PORT = "80";
+const string PATH = "/";
 
-int main() {
+int main(int argc, char **argv) {
 
 #if 1
   // request.get(url)
