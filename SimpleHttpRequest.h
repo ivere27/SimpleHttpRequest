@@ -192,9 +192,9 @@ class SimpleHttpRequest {
   //FIXME : variadic ..Args using tuple.
   template <typename... Args>
   SimpleHttpRequest& emit(string name, Args... args) {
-    if (name.compare("response") == 0 && responseCallback != NULL)
+    if (name.compare("response") == 0 && responseCallback != nullptr)
       responseCallback(std::forward<Response>(response));
-    else if (name.compare("error") == 0 && errorCallback != NULL)
+    else if (name.compare("error") == 0 && errorCallback != nullptr)
       errorCallback(std::move(Error(args...)));
     else if (eventListeners.count(name))
       eventListeners[name]();
@@ -459,8 +459,8 @@ class SimpleHttpRequest {
   uv_close_cb onClose;
 
   Callback<> eventListeners;
-  std::function<void(Response&&)> responseCallback = NULL;
-  std::function<void(Error&&)> errorCallback = NULL;
+  std::function<void(Response&&)> responseCallback = nullptr;
+  std::function<void(Error&&)> errorCallback = nullptr;
 
   map<string, string> options;
   map<string, string> requestHeaders;
