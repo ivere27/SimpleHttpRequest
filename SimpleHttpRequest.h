@@ -57,7 +57,7 @@ void LOGI(T t, Args && ...args)
 }
 
 
-// declares
+// Forward declaration
 class Error;
 class Response;
 class SimpleHttpRequest;
@@ -101,14 +101,6 @@ class SimpleHttpRequest {
     _defaultLoopAbsented = true;
   }
   SimpleHttpRequest(uv_loop_t *loop) : uv_loop(loop) {
-
-    onClose = [](uv_handle_t* handle) {
-      SimpleHttpRequest *client = (SimpleHttpRequest*)handle->data;
-      LOGI("onClose");
-      handle->data = NULL;
-      client->_clearTimer();
-    };
-
     http_parser_init(&parser, HTTP_RESPONSE);
     http_parser_settings_init(&parser_settings);
     parser_settings.on_message_begin = [](http_parser* parser) {
@@ -173,9 +165,8 @@ class SimpleHttpRequest {
 
       LOGI("on_message_complete. response size: ", client->response.tellp());
       if (http_should_keep_alive(parser)) {
-          LOGI("http_should_keep_alive");
-          uv_stream_t* tcp = (uv_stream_t*)&client->tcp;
-          uv_close((uv_handle_t*)tcp, client->onClose);
+        LOGI("http_should_keep_alive");
+        client->_clearConnection();
       }
       LOGI("status code : ", std::to_string(parser->status_code));
 
@@ -276,10 +267,10 @@ class SimpleHttpRequest {
     r = uv_timer_start(&timer, [](uv_timer_t* timer){
       SimpleHttpRequest *client = (SimpleHttpRequest*)timer->data;
       client->_clearTimer();
-      if (uv_is_closing((uv_handle_t*)&client->tcp) == 0)
-        uv_close((uv_handle_t*)&client->tcp, [](uv_handle_t*){});
+      client->_clearConnection();
 
-      client->emit("error", "ETIMEDOUT", "connection timed out");
+      int _err = -ETIMEDOUT;
+      client->emit("error", uv_err_name(_err), uv_strerror(_err));
     }, timeout, 0);
     ASSERT(r == 0);
 
@@ -339,16 +330,17 @@ class SimpleHttpRequest {
       [](uv_connect_t *req, int status) {
         SimpleHttpRequest *client = (SimpleHttpRequest*)req->data;
         if (status != 0) {
-          if (status == -89)  // ECANCELED by timer
-            return;           // handled. do nothing
+          if (status == -ECANCELED)  // ECANCELED by timer
+            return;                  // handled. do nothing
 
-          uv_close((uv_handle_t*)req->handle, client->onClose);
+          client->_clearTimer();
+          client->_clearConnection();
           LOGE("uv_connect_cb");
           client->emit("error", uv_err_name(status), uv_strerror(status));
           return;
         }
 
-        LOGI("TC connection established to ",
+        LOGI("TCP connection established to ",
           client->options["hostname"].c_str(),
           ":",client->options["port"].c_str());
 
@@ -456,8 +448,6 @@ class SimpleHttpRequest {
   http_parser parser;
   stringstream requestBody;
 
-  uv_close_cb onClose;
-
   Callback<> eventListeners;
   std::function<void(Response&&)> responseCallback = nullptr;
   std::function<void(Error&&)> errorCallback = nullptr;
@@ -518,10 +508,20 @@ class SimpleHttpRequest {
     return true;
   }
 
-  void _clearTimer() {
-    if (uv_is_closing((uv_handle_t*)&this->timer) == 0)
-      uv_close((uv_handle_t*)&this->timer, [](uv_handle_t*){});
+
+  void _clearConnection() {
+    LOGE("_clearConnection");
+    if (!uv_is_closing((uv_handle_t*)&this->tcp)) {
+      uv_close((uv_handle_t*)&this->tcp, [](uv_handle_t*){});
+    }
   }
+  void _clearTimer() {
+    LOGE("_clearTimer");
+    if (!uv_is_closing((uv_handle_t*)&this->timer)) {
+      uv_close((uv_handle_t*)&this->timer, [](uv_handle_t*){});
+    }
+  }
+
 };
 
 } // namespace request
