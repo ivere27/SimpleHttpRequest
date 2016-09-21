@@ -12,14 +12,22 @@ int main(int argc, char **argv) {
 
 #if 1
   // request.get(url)
-  SimpleHttpRequest request;
-  request.timeout = 1000;
-  request.get("http://" + HOSTNAME + ":" + PORT + PATH)
-  .on("error", [](Error&& err){
-    cerr << err.name << endl << err.message << endl;
-  }).on("response", [](Response&& res){
-    cout << res.str();
-  }).end();
+  try {
+    string url = argc > 1
+               ? argv[1]
+               : "http://" + HOSTNAME + ":" + PORT + PATH;
+    SimpleHttpRequest request;
+    request.timeout = 5000;
+    request.get(url)
+    .on("error", [](Error&& err){
+      cerr << err.name << endl << err.message << endl;
+      throw std::exception();
+    }).on("response", [](Response&& res){
+      cout << res.str();
+    }).end();
+  } catch(const std::exception &e) {
+    cerr << "exception catched" << endl;
+  }
 
   return 0;
 #endif
