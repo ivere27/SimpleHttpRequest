@@ -15,6 +15,9 @@
 
 #include "uv.h"
 #include "http_parser.h"
+#ifdef ENABLE_SSL
+#include "openssl/ssl.h"
+#endif
 
 namespace request {
 using namespace std;
@@ -313,6 +316,94 @@ class SimpleHttpRequest {
       requestHeaders["host"] = options["hostname"];
     }
 
+#ifdef ENABLE_SSL
+    // SSL
+    if (options.count("protocol") && options["protocol"].compare("https:") == 0) {
+      sslTimer.data = this;
+
+      // temparary async by timer :)
+      r = uv_timer_init(uv_loop, &sslTimer);
+      ASSERT(r == 0);
+      r = uv_timer_start(&sslTimer, [](uv_timer_t* timer){
+        SimpleHttpRequest *client = (SimpleHttpRequest*)timer->data;
+        uv_close((uv_handle_t*)&client->timer, [](uv_handle_t*){});
+
+        BIO *sbio = NULL;
+        int len;
+        char tmpbuf[65536];
+        SSL_CTX *ctx;
+        SSL *ssl;
+
+        // ERR_load_crypto_strings();
+        // ERR_load_SSL_strings();
+        SSL_library_init();
+        ctx = SSL_CTX_new(SSLv23_client_method());
+        sbio = BIO_new_ssl_connect(ctx);
+        BIO_get_ssl(sbio, &ssl);
+
+        if (!ssl) {
+            fprintf(stderr, "Can't locate SSL pointer\n");
+            return;
+        }
+
+        /* Don't want any retries */
+        SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
+
+        /* We might want to do other things with ssl here */
+        BIO_set_conn_hostname(sbio, string(client->options["hostname"] + ":" + client->options["port"]).c_str());
+
+        if (BIO_do_connect(sbio) <= 0) {
+            fprintf(stderr, "Error connecting to server\n");
+            //ERR_print_errors_fp(stderr);
+            return;
+        }
+
+        if (BIO_do_handshake(sbio) <= 0) {
+            fprintf(stderr, "Error establishing SSL connection\n");
+            //ERR_print_errors_fp(stderr);
+            return;
+        }
+
+        /* Could examine ssl here to get connection info */
+
+        stringstream res;
+        res << client->options["method"] << " " << client->options["path"] << " " << "HTTP/1.1\r\n";
+        for (const auto &kv : client->requestHeaders) {
+          res << kv.first << ":" << kv.second << "\r\n";
+        }
+        if (client->requestBody.tellp() > 0) {
+          res << "Content-Length: " << std::to_string(client->requestBody.tellp()) << "\r\n";
+          res << "\r\n";
+          res << client->requestBody.rdbuf();
+        } else {
+          res << "\r\n";
+        }
+
+        //BIO_puts(sbio, "GET / HTTP/1.0\n\n");
+        BIO_puts(sbio, res.str().c_str());
+
+        for (;;) {
+            len = BIO_read(sbio, tmpbuf, 65536);
+
+            fwrite(tmpbuf, len, 1, stdout);
+            if (len <= 0)
+                break;
+            //BIO_write(out, tmpbuf, len);
+        }
+
+        BIO_free_all(sbio);
+
+      }, 0, 0);
+      ASSERT(r == 0);
+
+      if (_defaultLoopAbsented) {
+        uv_run(uv_loop, UV_RUN_DEFAULT);
+      }
+      return;
+    }
+#endif
+
+    // HTTP
     r = uv_tcp_init(uv_loop, &tcp);
     if (r != 0) {
       LOGE("uv_tcp_init");
@@ -443,6 +534,9 @@ class SimpleHttpRequest {
   uv_connect_t connect_req;
   uv_write_t write_req;
   uv_timer_t timer;
+#ifdef ENABLE_SSL
+  uv_timer_t sslTimer;
+#endif
 
   http_parser_settings parser_settings;
   http_parser parser;
@@ -484,17 +578,17 @@ class SimpleHttpRequest {
       return false;
     }
 
+    options["protocol"] = url.substr(u.field_data[UF_SCHEMA].off, u.field_data[UF_SCHEMA].len);
+    options["protocol"] += ':';
     options["hostname"] = url.substr(u.field_data[UF_HOST].off, u.field_data[UF_HOST].len);
     options["port"] = url.substr(u.field_data[UF_PORT].off, u.field_data[UF_PORT].len);
     options["path"] = url.substr(u.field_data[UF_PATH].off, u.field_data[UF_PATH].len);
 
     if(options["port"].length() == 0) {
-      auto protocol = url.substr(u.field_data[UF_SCHEMA].off, u.field_data[UF_SCHEMA].len);
-
       // FIXME : well-known protocols
-      if (protocol.compare("http") == 0) {
+      if (options["protocol"].compare("http:") == 0) {
         options["port"] = "80";
-      } else if (protocol.compare("https") == 0) {
+      } else if (options["protocol"].compare("https:") == 0) {
         options["port"] = "443";
       } else {
         options["port"] = "0";
