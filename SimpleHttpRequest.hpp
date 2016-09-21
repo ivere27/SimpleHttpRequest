@@ -90,10 +90,10 @@ public:
 // Http Client
 class SimpleHttpRequest {
  public:
-  SimpleHttpRequest(map<string, string> &options, uv_loop_t *loop) :  SimpleHttpRequest(loop) {
+  SimpleHttpRequest(const map<string, string> &options, uv_loop_t *loop) :  SimpleHttpRequest(loop) {
     this->options = options;
   }
-  SimpleHttpRequest(map<string, string> &options, map<string, string> &requestHeaders, uv_loop_t *loop) :  SimpleHttpRequest(loop) {
+  SimpleHttpRequest(const map<string, string> &options, const map<string, string> &requestHeaders, uv_loop_t *loop) :  SimpleHttpRequest(loop) {
     this->options = options;
     this->requestHeaders = requestHeaders;
   }
@@ -182,7 +182,7 @@ class SimpleHttpRequest {
 
   //FIXME : variadic ..Args using tuple.
   template <typename... Args>
-  SimpleHttpRequest& emit(string name, Args... args) {
+  SimpleHttpRequest& emit(const string name, Args... args) {
     if (name.compare("response") == 0 && responseCallback != nullptr)
       responseCallback(std::forward<Response>(response));
     else if (name.compare("error") == 0 && errorCallback != nullptr)
@@ -193,25 +193,25 @@ class SimpleHttpRequest {
     return *this;
   }
 
-  SimpleHttpRequest& on(string name, std::function<void(Response&&)> func) {
+  SimpleHttpRequest& on(const string name, std::function<void(Response&&)> func) {
     if (name.compare("response") == 0)
       responseCallback = func;
 
     return *this;
   }
-  SimpleHttpRequest& on(string name, std::function<void(Error&&)> func) {
+  SimpleHttpRequest& on(const string name, std::function<void(Error&&)> func) {
     if (name.compare("error") == 0)
       errorCallback = func;
 
     return *this;
   }
   template <typename... Args>
-  SimpleHttpRequest& on(string name, std::function<void(Args...)> func) {
+  SimpleHttpRequest& on(const string name, std::function<void(Args...)> func) {
     eventListeners[name] = func;
 
     return *this;
   }
-  SimpleHttpRequest& on(string name, std::function<void()> func) {
+  SimpleHttpRequest& on(const string name, std::function<void()> func) {
     eventListeners[name] = func;
 
     return *this;
