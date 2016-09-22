@@ -46,6 +46,7 @@ uv_loop = uv_default_loop();
 map<string, string> options = {
   { "hostname", "google.com" },
   { "port"    , "80"         },
+//{ "protocol", "https:"     },
   { "path"    , "/"          },
   { "method"  , "GET"        }
 };
@@ -72,6 +73,7 @@ map<string, string> options;
 map<string, string> headers;
 options["hostname"] = "example.org";
 options["port"] = "80";
+//options["protocol"] = "https:";
 options["path"] = "/";
 options["method"] = "POST";
 headers["content-type"] = "application/json";
@@ -92,8 +94,8 @@ return uv_run(uv_loop, UV_RUN_DEFAULT);
 ```
 
 
-
-## git clone with submodules.
+## build & test
+### git clone with submodules.
 ```bash
 git clone --recursive https://github.com/ivere27/SimpleHttpRequest.git
 cd SimpleHttpRequest
@@ -104,7 +106,7 @@ cd ..
 # cd openssl && ./config && make
 ```
 
-## example.cpp
+### example.cpp - http
 ```bash
 $ g++ example.cpp --std=c++11 \
 -I./http-parser/ -I./libuv/include/ \
@@ -113,10 +115,8 @@ $ g++ example.cpp --std=c++11 \
 -lpthread \
 && DEBUG=1 ./a.out http://www.google.com
 ```
-
-## about
-* `This is experimental yet. use at your own purpose!`
-* https - ENABLE_SSL macro (about 2.5MB will be added)
+### example.cpp - https
+ENABLE_SSL macro (about 2.5MB will be added)
 ```bash
 $ g++ example.cpp --std=c++11 \
 -I./http-parser/ -I./libuv/include/ -I./openssl/include/ \
@@ -126,6 +126,15 @@ $ g++ example.cpp --std=c++11 \
 -lpthread -ldl \
 -DENABLE_SSL \
 && DEBUG=* ./a.out https://www.google.com
+```
+
+## about
+* `This is experimental yet. use at your own purpose!`
+* binary test
+```bash
+$ ./a.out http://www.google.com/images/nav_logo242.png > a.png
+$ file a.png
+a.png: PNG image data, 167 x 410, 8-bit/color RGBA, non-interlaced
 ```
 * a project of 'Second Compiler'.
 
