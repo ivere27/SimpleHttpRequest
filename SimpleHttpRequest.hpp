@@ -142,10 +142,24 @@ class SimpleHttpRequest {
       client->lastHeaderFieldBuf = NULL;
       return 0;
     };
-    parser_settings.on_headers_complete = [](http_parser *p) {
-      LOGI("on_headers_complete");
+    parser_settings.on_headers_complete = [](http_parser *parser) {
+      SimpleHttpRequest *client = (SimpleHttpRequest*)parser->data;
+      LOGI("on_headers_complete. status code : ", std::to_string(parser->status_code));
+      client->response.statusCode = parser->status_code;
 
-      SimpleHttpRequest *client = (SimpleHttpRequest*)p->data;
+      // if there's no body(content-length == 0)
+      // and it's not chunked.
+      // FIXME : use parser's state.
+      // TRY : telnet apple.com 80
+      //       GET / HTTP/1.1\r\nhost:apple.com\r\n\r\n
+      if ( client->response.headers.count("content-length") == 0
+        && ( client->response.headers.count("transfer-encoding") == 0
+          || ( client->response.headers.count("transfer-encoding") > 0)
+            && client->response.headers["transfer-encoding"].compare("chunked") < 0)) {
+        LOGI("no body");
+        return 1;
+      }
+
       return 0;
     };
 
@@ -172,11 +186,9 @@ class SimpleHttpRequest {
         LOGI("http_should_keep_alive");
         client->_clearConnection();
       }
-      LOGI("status code : ", std::to_string(parser->status_code));
 
       // response should be called after on_message_complete
       //LOGI(client->response.tellp());
-      client->response.statusCode = parser->status_code;
       client->emit("response");
 
       return 0;
@@ -279,6 +291,7 @@ class SimpleHttpRequest {
     r = uv_timer_init(uv_loop, &timer);
     ASSERT(r == 0);
     r = uv_timer_start(&timer, [](uv_timer_t* timer){
+      LOGE("timeout fired");
       SimpleHttpRequest *client = (SimpleHttpRequest*)timer->data;
       client->_clearTimer();
       client->_clearConnection();
@@ -395,7 +408,7 @@ class SimpleHttpRequest {
         for (;;) {
           int nread = BIO_read(client->sbio, tmpbuf, sizeof(tmpbuf));
           ssize_t parsed;
-          LOGI("read/buf ", nread, "/", sizeof(tmpbuf));
+          LOGI("HTTPS read/buf ", nread, "/", sizeof(tmpbuf));
 
           if (nread <= 0)
             break;  // EOF
