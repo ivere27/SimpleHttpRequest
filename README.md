@@ -1,7 +1,8 @@
 # SimpleHttpRequest
 
-* c++11 http client based on libuv and http-parser
+* c++11 http client based on libuv, http-parser and openssl
 * a single header file
+* http/https supports
 
 ## Usage
 ### .get , .post , .put , .del
@@ -95,23 +96,37 @@ return uv_run(uv_loop, UV_RUN_DEFAULT);
 ## git clone with submodules.
 ```bash
 git clone --recursive https://github.com/ivere27/SimpleHttpRequest.git
-cd SimpleHttpRequest/http-parser && make
-cd ../..
-cd SimpleHttpRequest/libuv && ./autogen.sh && ./configure && make
+cd SimpleHttpRequest
+cd http-parser && make
+cd ..
+cd libuv && ./autogen.sh && ./configure && make
+cd ..
+# cd openssl && ./config && make
 ```
 
 ## example.cpp
 ```bash
 $ g++ example.cpp --std=c++11 \
 -I./http-parser/ -I./libuv/include/ \
--lpthread  \
 ./libuv/.libs/libuv.a \
-./http-parser/http_parser.o && DEBUG=1 ./a.out
+./http-parser/http_parser.o \
+-lpthread \
+&& DEBUG=1 ./a.out http://www.google.com
 ```
 
 ## about
 * `This is experimental yet. use at your own purpose!`
-* https not supported.
+* https - ENABLE_SSL macro (about 2.5MB will be added)
+```bash
+$ g++ example.cpp --std=c++11 \
+-I./http-parser/ -I./libuv/include/ -I./openssl/include/ \
+./libuv/.libs/libuv.a \
+./http-parser/http_parser.o \
+./openssl/libssl.a ./openssl/libcrypto.a \
+-lpthread -ldl \
+-DENABLE_SSL \
+&& DEBUG=* ./a.out https://www.google.com
+```
 * a project of 'Second Compiler'.
 
 # License

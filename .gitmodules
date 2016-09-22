@@ -5,5 +5,5 @@
 	path = http-parser
 	url = https://github.com/nodejs/http-parser.git
 [submodule "openssl"]
-  path = openssl
-  url = https://github.com/openssl/openssl.git
+	path = openssl
+	url = https://github.com/openssl/openssl.git
