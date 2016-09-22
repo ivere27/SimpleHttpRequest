@@ -7,6 +7,7 @@ using namespace request;
 const string HOSTNAME = "www.google.com";
 const string PORT = "80";
 const string PATH = "/";
+const string PROTOCOL = "http:";
 
 int main(int argc, char **argv) {
 
@@ -15,18 +16,19 @@ int main(int argc, char **argv) {
   try {
     string url = argc > 1
                ? argv[1]
-               : "http://" + HOSTNAME + ":" + PORT + PATH;
+               : PROTOCOL + "//" + HOSTNAME + ":" + PORT + PATH;
+
     SimpleHttpRequest request;
     request.timeout = 5000;
     request.get(url)
     .on("error", [](Error&& err){
       cerr << err.name << endl << err.message << endl;
-      throw std::exception();
+      throw std::runtime_error(err.message);
     }).on("response", [](Response&& res){
       cout << res.str();
     }).end();
   } catch(const std::exception &e) {
-    cerr << "exception catched" << endl;
+    cerr << "exception catched : " << e.what() << endl ;
   }
 
   return 0;
@@ -55,6 +57,7 @@ int main(int argc, char **argv) {
   map<string, string> options = {
     { "hostname", HOSTNAME },
     { "port"    , PORT     },
+//  { "protocol", "https:" },
     { "path"    , PATH     },
     { "method"  , "GET"    }
   };
