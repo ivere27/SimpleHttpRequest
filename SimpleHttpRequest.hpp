@@ -16,6 +16,7 @@
 #include "uv.h"
 #include "http_parser.h"
 #ifdef ENABLE_SSL
+//#include "openssl/err.h"
 #include "openssl/ssl.h"
 #endif
 
@@ -265,6 +266,16 @@ class SimpleHttpRequest {
   void end() {
     int r = 0;
 
+    // FIXME : so far, we dont support keep-alive
+    //         even thought 'HTTP/1.1'
+    requestHeaders["Connection"] = "close";
+
+    tcp.data = this;          //FIXME : use one
+    connect_req.data = this;
+    parser.data = this;
+    write_req.data = this;
+    timer.data = this;
+
     r = uv_timer_init(uv_loop, &timer);
     ASSERT(r == 0);
     r = uv_timer_start(&timer, [](uv_timer_t* timer){
@@ -321,48 +332,47 @@ class SimpleHttpRequest {
     if (options.count("protocol") && options["protocol"].compare("https:") == 0) {
       sslTimer.data = this;
 
-      // temparary async by timer :)
+      // temporary async by timer :)
       r = uv_timer_init(uv_loop, &sslTimer);
       ASSERT(r == 0);
       r = uv_timer_start(&sslTimer, [](uv_timer_t* timer){
         SimpleHttpRequest *client = (SimpleHttpRequest*)timer->data;
-        uv_close((uv_handle_t*)&client->timer, [](uv_handle_t*){});
-
-        BIO *sbio = NULL;
-        int len;
-        char tmpbuf[65536];
-        SSL_CTX *ctx;
-        SSL *ssl;
+        uv_close((uv_handle_t*)&client->sslTimer, [](uv_handle_t*){});
 
         // ERR_load_crypto_strings();
         // ERR_load_SSL_strings();
         SSL_library_init();
-        ctx = SSL_CTX_new(SSLv23_client_method());
-        sbio = BIO_new_ssl_connect(ctx);
-        BIO_get_ssl(sbio, &ssl);
+        client->ctx = SSL_CTX_new(SSLv23_client_method());
+        client->sbio = BIO_new_ssl_connect(client->ctx);
+        BIO_get_ssl(client->sbio, &client->ssl);
 
-        if (!ssl) {
-            fprintf(stderr, "Can't locate SSL pointer\n");
-            return;
+        if (!client->ssl) {
+          LOGE("ssl - Can't locate SSL pointer");
+          client->emit("error", "SSL", "Can't locate SSL pointer");
+          return;
         }
 
         /* Don't want any retries */
-        SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
+        SSL_set_mode(client->ssl, SSL_MODE_AUTO_RETRY);
 
         /* We might want to do other things with ssl here */
-        BIO_set_conn_hostname(sbio, string(client->options["hostname"] + ":" + client->options["port"]).c_str());
+        BIO_set_conn_hostname(client->sbio, string(client->options["hostname"] + ":" + client->options["port"]).c_str());
 
-        if (BIO_do_connect(sbio) <= 0) {
-            fprintf(stderr, "Error connecting to server\n");
-            //ERR_print_errors_fp(stderr);
-            return;
+        if (BIO_do_connect(client->sbio) <= 0) {
+          LOGE("ssl - Error connecting to server");
+          client->emit("error", "SSL", "Error connecting to server");
+          return;
         }
 
-        if (BIO_do_handshake(sbio) <= 0) {
-            fprintf(stderr, "Error establishing SSL connection\n");
-            //ERR_print_errors_fp(stderr);
-            return;
+        if (BIO_do_handshake(client->sbio) <= 0) {
+          LOGE("ssl - Error establishing SSL connection");
+          client->emit("error", "SSL", "Error establishing SSL connection");
+          return;
         }
+
+        LOGI("HTTPS connection established to ",
+          client->options["hostname"].c_str(),
+          ":",client->options["port"].c_str());
 
         /* Could examine ssl here to get connection info */
 
@@ -375,24 +385,37 @@ class SimpleHttpRequest {
           res << "Content-Length: " << std::to_string(client->requestBody.tellp()) << "\r\n";
           res << "\r\n";
           res << client->requestBody.rdbuf();
-        } else {
           res << "\r\n";
         }
+        res << "\r\n";
 
-        //BIO_puts(sbio, "GET / HTTP/1.0\n\n");
-        BIO_puts(sbio, res.str().c_str());
+        BIO_puts(client->sbio, res.str().c_str());
 
+        char tmpbuf[65536];
         for (;;) {
-            len = BIO_read(sbio, tmpbuf, 65536);
+          int nread = BIO_read(client->sbio, tmpbuf, sizeof(tmpbuf));
+          ssize_t parsed;
+          LOGI("read/buf ", nread, "/", sizeof(tmpbuf));
 
-            fwrite(tmpbuf, len, 1, stdout);
-            if (len <= 0)
-                break;
-            //BIO_write(out, tmpbuf, len);
+          if (nread <= 0)
+            break;  // EOF
+
+          http_parser *parser = &client->parser;
+          parsed = (ssize_t)http_parser_execute(parser, &client->parser_settings, tmpbuf, nread);
+          LOGI("parsed: ", parsed);
+          if (parser->upgrade) {
+            LOGE("raise upgrade unsupported");
+            client->emit("error", "upgrade", "upgrade is not supported");
+            return;
+          } else if (parsed != nread) {
+            LOGE("http parse error. ", parsed," parsed of", nread);
+            LOGE(http_errno_description(HTTP_PARSER_ERRNO(parser)));
+            client->emit("error", "httpparse", "http parser error");
+            return;
+          }
         }
 
-        BIO_free_all(sbio);
-
+        BIO_free_all(client->sbio);
       }, 0, 0);
       ASSERT(r == 0);
 
@@ -410,12 +433,6 @@ class SimpleHttpRequest {
       this->emit("error", uv_err_name(r), uv_strerror(r));
       return;
     }
-
-    tcp.data = this;          //FIXME : use one
-    connect_req.data = this;
-    parser.data = this;
-    write_req.data = this;
-    timer.data = this;
 
     r = uv_tcp_connect(&connect_req, &tcp, reinterpret_cast<const sockaddr*>(&dest),
       [](uv_connect_t *req, int status) {
@@ -439,8 +456,7 @@ class SimpleHttpRequest {
           [](uv_stream_t *tcp, ssize_t nread, const uv_buf_t * buf) {
             SimpleHttpRequest* client = (SimpleHttpRequest*)tcp->data;
             ssize_t parsed;
-            LOGI("onRead ", nread);
-            LOGI("buf len: ", buf->len);
+            LOGI("read/buf ", nread, "/", buf->len);
             if (nread > 0) {
               http_parser *parser = &client->parser;
               parsed = (ssize_t)http_parser_execute(parser, &client->parser_settings, buf->base, nread);
@@ -485,9 +501,9 @@ class SimpleHttpRequest {
           res << "Content-Length: " << std::to_string(client->requestBody.tellp()) << "\r\n";
           res << "\r\n";
           res << client->requestBody.rdbuf();
-        } else {
           res << "\r\n";
         }
+        res << "\r\n";
 
         // FIXME : expensive to copy.
         string resString = res.str();
@@ -534,8 +550,12 @@ class SimpleHttpRequest {
   uv_connect_t connect_req;
   uv_write_t write_req;
   uv_timer_t timer;
+
 #ifdef ENABLE_SSL
   uv_timer_t sslTimer;
+  BIO *sbio = NULL;
+  SSL_CTX *ctx;
+  SSL *ssl;
 #endif
 
   http_parser_settings parser_settings;
@@ -605,7 +625,7 @@ class SimpleHttpRequest {
 
   void _clearConnection() {
     LOGE("_clearConnection");
-    if (!uv_is_closing((uv_handle_t*)&this->tcp)) {
+    if (uv_is_active((uv_handle_t*)&this->tcp) && !uv_is_closing((uv_handle_t*)&this->tcp)) {
       uv_close((uv_handle_t*)&this->tcp, [](uv_handle_t*){});
     }
   }
