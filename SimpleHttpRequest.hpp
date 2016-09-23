@@ -23,6 +23,10 @@
 namespace request {
 using namespace std;
 
+#ifndef ULLONG_MAX
+# define ULLONG_MAX ((uint64_t) -1) /* 2^64-1 */
+#endif
+
 #if defined(NDEBUG)
 # define ASSERT(exp)
 #else
@@ -147,15 +151,10 @@ class SimpleHttpRequest {
       LOGI("on_headers_complete. status code : ", std::to_string(parser->status_code));
       client->response.statusCode = parser->status_code;
 
-      // if there's no body(content-length == 0)
-      // and it's not chunked.
-      // FIXME : use parser's state.
-      // TRY : telnet apple.com 80
-      //       GET / HTTP/1.1\r\nhost:apple.com\r\n\r\n
-      if ( client->response.headers.count("content-length") == 0
-        && ( client->response.headers.count("transfer-encoding") == 0
-          || ( client->response.headers.count("transfer-encoding") > 0)
-            && client->response.headers["transfer-encoding"].compare("chunked") < 0)) {
+      // if there's no body(301 Move Permanently or HEAD)
+      int hasBody = parser->flags & F_CHUNKED ||
+          (parser->content_length > 0 && parser->content_length != ULLONG_MAX);
+      if (!hasBody) {
         LOGI("no body");
         return 1;
       }
