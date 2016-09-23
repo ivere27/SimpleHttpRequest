@@ -202,7 +202,7 @@ class SimpleHttpRequest {
     if (name.compare("response") == 0 && responseCallback != nullptr)
       responseCallback(std::forward<Response>(response));
     else if (name.compare("error") == 0 && errorCallback != nullptr)
-      errorCallback(std::move(Error(args...)));
+      errorCallback(Error(args...));
     else if (eventListeners.count(name))
       eventListeners[name]();
 
