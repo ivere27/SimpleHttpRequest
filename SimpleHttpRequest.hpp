@@ -109,6 +109,8 @@ class SimpleHttpRequest {
     _defaultLoopAbsented = true;
   }
   SimpleHttpRequest(uv_loop_t *loop) : uv_loop(loop) {
+    if(request::uv_loop) { }; // gcc
+
     http_parser_init(&parser, HTTP_RESPONSE);
     http_parser_settings_init(&parser_settings);
     parser_settings.on_message_begin = [](http_parser* parser) {
