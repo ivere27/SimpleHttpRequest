@@ -1,6 +1,10 @@
 #ifndef SIMPLE_HTTP_REQUEST_H_
 #define SIMPLE_HTTP_REQUEST_H_
 
+#define  SIMPLE_HTTP_REQUEST_VERSION_MAJOR 0
+#define  SIMPLE_HTTP_REQUEST_VERSION_MINOR 1
+#define  SIMPLE_HTTP_REQUEST_VERSION_PATCH 0
+
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
