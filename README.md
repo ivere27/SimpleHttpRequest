@@ -116,7 +116,7 @@ $ g++ example.cpp --std=c++11 \
 && DEBUG=1 ./a.out http://www.google.com
 ```
 ### example.cpp - https
-ENABLE_SSL macro (about 2.5MB will be added)
+ENABLE_SSL macro (about 2.5MB will be added or $ strip a.out )
 ```bash
 $ g++ example.cpp --std=c++11 \
 -I./http-parser/ -I./libuv/include/ -I./openssl/include/ \
