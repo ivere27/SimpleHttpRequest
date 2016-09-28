@@ -624,9 +624,11 @@ class SimpleHttpRequest {
 
     if(options["port"].length() == 0) {
       // FIXME : well-known protocols
-      if (options["protocol"].compare("http:") == 0) {
+      if ( options["protocol"].compare("http") == 0
+        || options["protocol"].compare("http:") == 0) {
         options["port"] = "80";
-      } else if (options["protocol"].compare("https:") == 0) {
+      } else if ( options["protocol"].compare("https") == 0
+               || options["protocol"].compare("https:") == 0) {
         options["port"] = "443";
       } else {
         options["port"] = "0";
