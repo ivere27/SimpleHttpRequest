@@ -347,7 +347,8 @@ class SimpleHttpRequest {
 
 #ifdef ENABLE_SSL
     // SSL
-    if (options.count("protocol") && options["protocol"].compare("https:") == 0) {
+    if (options.count("protocol") && ( options["protocol"].compare("https") == 0
+                                    || options["protocol"].compare("https:") == 0)) {
       sslTimer.data = this;
 
       // temporary async by timer :)
