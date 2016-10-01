@@ -105,6 +105,10 @@ class SimpleHttpRequest {
   SimpleHttpRequest(const map<string, string> &options, uv_loop_t *loop) :  SimpleHttpRequest(loop) {
     this->options = options;
   }
+  SimpleHttpRequest(const map<string, string> &options, const map<string, string> &requestHeaders) :  SimpleHttpRequest(uv_default_loop()) {
+    this->options = options;
+    this->requestHeaders = requestHeaders;
+  }
   SimpleHttpRequest(const map<string, string> &options, const map<string, string> &requestHeaders, uv_loop_t *loop) :  SimpleHttpRequest(loop) {
     this->options = options;
     this->requestHeaders = requestHeaders;
