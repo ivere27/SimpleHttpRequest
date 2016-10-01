@@ -93,7 +93,7 @@ public:
 };
 
 // Response
-class Response : public ostringstream {
+class Response : public stringstream {
 public:
   unsigned int statusCode = 0;
   map<string, string> headers;
