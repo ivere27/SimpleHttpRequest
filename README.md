@@ -108,12 +108,7 @@ cd ..
 
 ### example.cpp - http
 ```bash
-$ g++ example.cpp --std=c++11 \
--I./http-parser/ -I./libuv/include/ \
-./libuv/.libs/libuv.a \
-./http-parser/http_parser.o \
--lpthread \
-&& DEBUG=1 ./a.out http://www.google.com
+$ make
 ```
 ### example.cpp - https
 ENABLE_SSL macro (about 2.5MB will be added or $ strip a.out )
