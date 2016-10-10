@@ -81,7 +81,7 @@ static uv_loop_t* uv_loop;
 static uv_alloc_cb uvAllocCb = [](uv_handle_t* handle, size_t size, uv_buf_t* buf) {
   buf->base = (char*)malloc(size);
   buf->len = size;
-};;
+};
 
 // Error
 class Error {
@@ -118,6 +118,16 @@ class SimpleHttpRequest {
   }
   SimpleHttpRequest(uv_loop_t *loop) : uv_loop(loop) {
     if(request::uv_loop) { }; // gcc
+
+    // FIXME : so far, we dont support keep-alive
+    //         even thought 'HTTP/1.1'
+    requestHeaders["Connection"] = "close";
+
+    tcp.data = this;          //FIXME : use one
+    connect_req.data = this;
+    parser.data = this;
+    write_req.data = this;
+    timer.data = this;
 
     http_parser_init(&parser, HTTP_RESPONSE);
     http_parser_settings_init(&parser_settings);
@@ -286,17 +296,6 @@ class SimpleHttpRequest {
 
   void end() {
     int r = 0;
-
-    // FIXME : so far, we dont support keep-alive
-    //         even thought 'HTTP/1.1'
-    requestHeaders["Connection"] = "close";
-
-    tcp.data = this;          //FIXME : use one
-    connect_req.data = this;
-    parser.data = this;
-    write_req.data = this;
-    timer.data = this;
-
     r = uv_timer_init(uv_loop, &timer);
     ASSERT(r == 0);
     r = uv_timer_start(&timer, [](uv_timer_t* timer){
