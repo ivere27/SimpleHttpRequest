@@ -3,10 +3,10 @@ CFLAGS=-c -Wall -std=c++11 \
 		-I./http-parser/ \
 		-I./libuv/include/ \
 		-I./openssl/include/
-LDFLAGS=-lpthread \
-		./libuv/.libs/libuv.a \
+LDFLAGS=./libuv/.libs/libuv.a \
 		./openssl/libcrypto.a \
-		./http-parser/http_parser.o
+		./http-parser/http_parser.o \
+		-lpthread
 SOURCES=example.cpp
 OBJECTS=$(SOURCES:.cpp=.o)
 EXECUTABLE=example
