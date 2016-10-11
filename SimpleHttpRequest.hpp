@@ -77,7 +77,6 @@ class SimpleHttpRequest;
 template<class... T>
 using Callback = std::map<std::string, std::function<void(T...)>>;
 
-static uv_loop_t* uv_loop;
 static uv_alloc_cb uvAllocCb = [](uv_handle_t* handle, size_t size, uv_buf_t* buf) {
   buf->base = (char*)malloc(size);
   buf->len = size;
@@ -117,8 +116,6 @@ class SimpleHttpRequest {
     _defaultLoopAbsented = true;
   }
   SimpleHttpRequest(uv_loop_t *loop) : uv_loop(loop) {
-    if(request::uv_loop) { }; // gcc
-
     // FIXME : so far, we dont support keep-alive
     //         even thought 'HTTP/1.1'
     requestHeaders["Connection"] = "close";
