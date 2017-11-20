@@ -21,20 +21,22 @@ set(SRC ${CMAKE_SOURCE_DIR})
 
 set(HTTP_PARSER ${SRC}/http-parser)
 set(LIBUV ${SRC}/libuv)
-set(OPENSSL ${SRC}/openssl)
 
 include_directories(
         ${SRC}
         ${HTTP_PARSER}
         ${LIBUV}/include
-        ${OPENSSL}/include
 )
 
-link_directories(${LIBUV}/.libs)
+link_directories(
+        ${LIBUV}/.libs
+        ${HTTP_PARSER}
+)
 set(LIBS
-        uv
-        pthread
         crypto
+        http_parser
+        pthread
+        uv
 )
 
 #########
@@ -43,6 +45,5 @@ set(LIBS
 
 add_executable(example
     ${SRC}/example.cpp
-    ${HTTP_PARSER}/http_parser.c
 )
 target_link_libraries(example ${LIBS})
