@@ -108,6 +108,9 @@ cd ..
 
 ### Using CMake & Conan package
 
+By uncommenting the lines in `CMakeLists.txt` as indicated, instead of having
+to build OpenSSL "in place," we can use Conan package manager.
+
 See [conan.io](http://conan.io) for more details; the TL;dr is `pip install conan`.
 
 ```bash

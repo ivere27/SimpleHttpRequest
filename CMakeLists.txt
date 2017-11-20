@@ -1,16 +1,16 @@
-# This file (c) 2017 AlertAvert.com.  All rights reserved.
 
 project(SimpleHttpRequest)
 cmake_minimum_required(VERSION 3.4)
 
 # Version number
 set(RELEASE_MAJOR 0)
-set(RELEASE_MINOR 2)
+set(RELEASE_MINOR 1)
 set(RELEASE_PATCH 0)
 
-# Use Conan for OpenSSL support.
-include(.conan/conanbuildinfo.cmake)
-conan_basic_setup()
+# Uncomment the following lines to use Conan for OpenSSL support.
+#
+#  include(.conan/conanbuildinfo.cmake)
+#  conan_basic_setup()
 
 set(RELEASE_STRING "${RELEASE_MAJOR}.${RELEASE_MINOR}.${RELEASE_PATCH}-${BUILD_ID}")
 message(STATUS "Building Release: ${RELEASE_STRING}")
