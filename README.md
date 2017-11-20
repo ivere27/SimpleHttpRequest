@@ -106,6 +106,30 @@ cd ..
 # cd openssl && ./config && make
 ```
 
+### Using CMake & Conan package
+
+By uncommenting the lines in `CMakeLists.txt` as indicated, instead of having
+to build OpenSSL "in place," we can use Conan package manager.
+
+See [conan.io](http://conan.io) for more details; the TL;dr is `pip install conan`.
+
+```bash
+# Create the .so library for http-parser:
+cd http-parser && make library
+ln -s libhttp_parser.so.2.7.1 libhttp_parser.so
+
+# Build the package dependencies; currently just OpenSSL
+mkdir .conan && cd .conan
+conan install .. -s compiler=clang -s compiler.version=4.0 \
+    -s compiler.libcxx=libstdc++11 --build=missing
+
+# Build the example binary.
+mkdir build && cd build
+cmake .. && cmake --build .
+```
+
+`TODO: install step in CMake & detailed instruction how to use this in a C++ project`
+
 ### example.cpp - http
 ```bash
 $ make

@@ -1,0 +1,29 @@
+# Git Ignore file
+
+
+.cproject
+.project
+.settings/
+.conan/
+docs/html/
+
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+gen/
+
+# Recommended build directory
+build/
+Debug/
+.conan/
+
+# Compiler intermediate files
+*.o
+*.la
+*.so
+
+# Example files and binaries
+example
+

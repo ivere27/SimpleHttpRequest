@@ -1,0 +1,14 @@
+# Conan Packaging configuration.
+# Created by M. Massenzio
+#
+# See the README for more information or http://conan.io
+#
+#   $ conan install .. -s compiler=clang -s compiler.version=4.0 \
+#      -s compiler.libcxx=libstdc++11 --build=missing
+
+
+[requires]
+OpenSSL/1.0.2j@lasote/stable
+
+[generators]
+cmake
