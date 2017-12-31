@@ -396,7 +396,13 @@ class SimpleHttpRequest {
         /* Could examine ssl here to get connection info */
 
         stringstream res;
-        res << client->options["method"] << " " << client->options["path"] << " " << "HTTP/1.1\r\n";
+        res << client->options["method"]
+            << " "
+            << client->options["path"]
+            << (client->options["query"].length() == 0 ? "" : "?" + client->options["query"])
+            << " "
+            << "HTTP/1.1\r\n";
+
         for (const auto &kv : client->requestHeaders) {
           res << kv.first << ":" << kv.second << "\r\n";
         }
@@ -512,7 +518,13 @@ class SimpleHttpRequest {
 
         uv_buf_t resbuf;
         stringstream res;
-        res << client->options["method"] << " " << client->options["path"] << " " << "HTTP/1.1\r\n";
+        res << client->options["method"]
+            << " "
+            << client->options["path"]
+            << (client->options["query"].length() == 0 ? "" : "?" + client->options["query"])
+            << " "
+            << "HTTP/1.1\r\n";
+
         for (const auto &kv : client->requestHeaders) {
           res << kv.first << ":" << kv.second << "\r\n";
         }
@@ -611,7 +623,6 @@ class SimpleHttpRequest {
   bool _parseUrl(const string &url) {
     struct http_parser_url u;
     http_parser_url_init(&u);
-
     if (http_parser_parse_url(url.c_str(), url.length(), 0, &u)) {
       LOGE("failed to parse URL - ", url);
       return false;
@@ -622,6 +633,7 @@ class SimpleHttpRequest {
     options["hostname"] = url.substr(u.field_data[UF_HOST].off, u.field_data[UF_HOST].len);
     options["port"] = url.substr(u.field_data[UF_PORT].off, u.field_data[UF_PORT].len);
     options["path"] = url.substr(u.field_data[UF_PATH].off, u.field_data[UF_PATH].len);
+    options["query"] = url.substr(u.field_data[UF_QUERY].off, u.field_data[UF_QUERY].len);
 
     if(options["port"].length() == 0) {
       // FIXME : well-known protocols
